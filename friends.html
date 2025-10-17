@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Друзья - MySocialNet</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <h1>🐬 MySocialNet</h1>
+        <nav>
+            <a href="index.html" class="nav-btn">🏠 Лента</a>
+            <a href="profile.html" class="nav-btn">👤 Профиль</a>
+            <a href="friends.html" class="nav-btn active">👥 Друзья</a>
+            <a href="messages.html" class="nav-btn">💬 Сообщения</a>
+            <span id="userWelcome"></span>
+            <button onclick="logout()" class="btn logout-btn">🚪 Выйти</button>
+        </nav>
+    </header>
+
+    <div class="container">
+        <div class="friends-header">
+            <h2>👥 Мои друзья</h2>
+            <div class="search-box">
+                <input type="text" id="searchInput" placeholder="🔍 Поиск друзей..." onkeyup="searchUsers()">
+            </div>
+        </div>
+
+        <div class="friends-tabs">
+            <button class="tab-btn active" onclick="openFriendsTab('all')">Все друзья</button>
+            <button class="tab-btn" onclick="openFriendsTab('online')">Онлайн</button>
+            <button class="tab-btn" onclick="openFriendsTab('requests')">Заявки</button>
+            <button class="tab-btn" onclick="openFriendsTab('find')">Найти друзей</button>
+        </div>
+
+        <div id="all-friends" class="tab-content active">
+            <h3>Мои друзья</h3>
+            <div id="friendsList" class="friends-grid"></div>
+        </div>
+
+        <div id="online-friends" class="tab-content">
+            <h3>Друзья онлайн</h3>
+            <div id="onlineFriendsList" class="friends-grid"></div>
+        </div>
+
+        <div id="requests-friends" class="tab-content">
+            <h3>Заявки в друзья</h3>
+            <div id="requestsList" class="friends-grid"></div>
+        </div>
+
+        <div id="find-friends" class="tab-content">
+            <h3>Найти друзей</h3>
+            <div id="findFriendsList" class="friends-grid"></div>
+        </div>
+    </div>
+
+    <script>
+        let currentUser = null;
+        let database = { users: [], posts: [], comments: [], friends: [], messages: [] };
+
+        async function loadDatabase() {
+            const db = localStorage.getItem('social_network_db');
+            database = db ? JSON.parse(db) : { users: [], posts: [], comments: [], friends: [], messages: [] };
+        }
+
+        function checkAuth() {
+            currentUser = localStorage.getItem('currentUser');
+            if (!currentUser) {
+                window.location.href = 'login.html';
+                return;
+            }
+            document.getElementById('userWelcome').textContent = currentUser;
+            loadFriends();
+        }
+
+        function openFriendsTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            
+            document.getElementById(tabName + '-friends').classList.add('active');
+            event.target.classList.add('active');
+            
+            if (tabName === 'find') {
+                loadFindFriends();
+            }
+        }
+
+        function loadFriends() {
+            loadAllFriends();
+            loadOnlineFriends();
+            loadFriendRequests();
+        }
+
+        function loadAllFriends() {
+            const container = document.getElementById('friendsList');
+            const userFriends = database.friends.filter(f => 
+                f.user1 === currentUser || f.user2 === currentUser
+            );
+            
+            container.innerHTML = '';
+            
+            if (userFriends.length === 0) {
+                container.innerHTML = '<div class="no-friends">😔 У вас пока нет друзей</div>';
+                return;
+            }
+            
+            userFriends.forEach(friendship => {
+                const friendUsername = friendship.user1 === currentUser ? friendship.user2 : friendship.user1;
+                const friend = database.users.find(u => u.username === friendUsername);
+                
+                const friendElement = document.createElement('div');
+                friendElement.className = 'friend-card';
+                friendElement.innerHTML = `
+                    <img src="https://ui-avatars.com/api/?name=${friendUsername}&background=667eea&color=fff" class="avatar">
+                    <div class="friend-info">
+                        <strong>${friendUsername}</strong>
+                        <span class="friend-status online">🟢 В сети</span>
+                        <span class="friend-date">Друзья с ${new Date(friendship.timestamp).toLocaleDateString()}</span>
+                    </div>
+                    <div class="friend-actions">
+                        <button onclick="sendMessageToFriend('${friendUsername}')" class="btn btn-small">💬 Написать</button>
+                        <button onclick="removeFriend('${friendUsername}')" class="btn btn-small btn-danger">🗑️ Удалить</button>
+                    </div>
+                `;
+                container.appendChild(friendElement);
+            });
+        }
+
+        function loadOnlineFriends() {
+            const container = document.getElementById('onlineFriendsList');
+            // В реальном приложении здесь была бы проверка онлайн статуса
+            container.innerHTML = '<div class="no-friends">🟡 Функция "Онлайн" будет доступна в следующем обновлении</div>';
+        }
+
+        function loadFriendRequests() {
+            const container = document.getElementById('requestsList');
+            // В реальном приложении здесь были бы заявки в друзья
+            container.innerHTML = '<div class="no-friends">📨 Функция "Заявки в друзья" будет доступна в следующем обновлении</div>';
+        }
+
+        function loadFindFriends() {
+            const container = document.getElementById('findFriendsList');
+            const currentFriends = database.friends.filter(f => 
+                f.user1 === currentUser || f.user2 === currentUser
+            ).map(f => f.user1 === currentUser ? f.user2 : f.user1);
+            
+            const availableUsers = database.users.filter(u => 
+                u.username !== currentUser && !currentFriends.includes(u.username)
+            );
+            
+            container.innerHTML = '';
+            
+            if (availableUsers.length === 0) {
+                container.innerHTML = '<div class="no-friends">👥 Все пользователи уже ваши друзья!</div>';
+                return;
+            }
+            
+            availableUsers.forEach(user => {
+                const userElement = document.createElement('div');
+                userElement.className = 'friend-card';
+                userElement.innerHTML = `
+                    <img src="https://ui-avatars.com/api/?name=${user.username}&background=667eea&color=fff" class="avatar">
+                    <div class="friend-info">
+                        <strong>${user.username}</strong>
+                        <span class="friend-date">На сайте с ${new Date(user.joined).toLocaleDateString()}</span>
+                    </div>
+                    <button onclick="addFriend('${user.username}')" class="btn btn-small">➕ Добавить в друзья</button>
+                `;
+                container.appendChild(userElement);
+            });
+        }
+
+        function searchUsers() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            const cards = document.querySelectorAll('.friend-card');
+            
+            cards.forEach(card => {
+                const username = card.querySelector('strong').textContent.toLowerCase();
+                if (username.includes(searchTerm)) {
+                    card.style.display = 'flex';
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+        }
+
+        function addFriend(friendUsername) {
+            // Проверяем, нет ли уже такой дружбы
+            const existingFriendship = database.friends.find(f => 
+                (f.user1 === currentUser && f.user2 === friendUsername) ||
+                (f.user1 === friendUsername && f.user2 === currentUser)
+            );
+            
+            if (existingFriendship) {
+                alert('❌ Вы уже друзья с этим пользователем!');
+                return;
+            }
+            
+            // Создаем дружбу
+            database.friends.push({
+                id: Date.now(),
+                user1: currentUser,
+                user2: friendUsername,
+                timestamp: new Date().toISOString()
+            });
+            
+            localStorage.setItem('social_network_db', JSON.stringify(database));
+            alert(`✅ Теперь вы друзья с ${friendUsername}!`);
+            loadFindFriends();
+            loadAllFriends();
+        }
+
+        function removeFriend(friendUsername) {
+            if (!confirm(`Удалить ${friendUsername} из друзей?`)) return;
+            
+            database.friends = database.friends.filter(f => 
+                !(f.user1 === currentUser && f.user2 === friendUsername) &&
+                !(f.user1 === friendUsername && f.user2 === currentUser)
+            );
+            
+            localStorage.setItem('social_network_db', JSON.stringify(database));
+            alert(`👋 ${friendUsername} удален из друзей`);
+            loadAllFriends();
+        }
+
+        function sendMessageToFriend(friendUsername) {
+            alert(`💬 Открыть чат с ${friendUsername} (функция будет в следующем обновлении)`);
+        }
+
+        function logout() {
+            localStorage.removeItem('currentUser');
+            window.location.href = 'login.html';
+        }
+
+        async function init() {
+            await loadDatabase();
+            checkAuth();
+        }
+
+        init();
+    </script>
+</body>
+</html>

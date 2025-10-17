@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>MySocialNet - Главная</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <h1>🐬 MySocialNet</h1>
+        <nav>
+            <a href="index.html" class="nav-btn active">🏠 Лента</a>
+            <a href="profile.html" class="nav-btn">👤 Профиль</a>
+            <a href="friends.html" class="nav-btn">👥 Друзья</a>
+            <a href="messages.html" class="nav-btn">💬 Сообщения</a>
+            <span id="userWelcome"></span>
+            <button onclick="logout()" class="btn logout-btn">🚪 Выйти</button>
+        </nav>
+    </header>
+
+    <div class="container">
+        <!-- Статистика -->
+        <div class="stats-container">
+            <div class="stat-card">
+                <div class="stat-number" id="postsCount">0</div>
+                <div class="stat-label">Постов</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="usersCount">0</div>
+                <div class="stat-label">Пользователей</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="onlineCount">1</div>
+                <div class="stat-label">Онлайн</div>
+            </div>
+        </div>
+
+        <!-- Создание поста -->
+        <div class="create-post">
+            <div class="post-header">
+                <img src="https://ui-avatars.com/api/?name=User&background=667eea&color=fff" class="avatar" id="userAvatar">
+                <textarea id="postText" placeholder="Что у вас нового?"></textarea>
+            </div>
+            <div class="post-actions">
+                <button onclick="createPost()" class="btn post-btn">📝 Опубликовать</button>
+                <button onclick="addEmoji('😊')" class="emoji-btn">😊</button>
+                <button onclick="addEmoji('😂')" class="emoji-btn">😂</button>
+                <button onclick="addEmoji('❤️')" class="emoji-btn">❤️</button>
+                <button onclick="addEmoji('🔥')" class="emoji-btn">🔥</button>
+            </div>
+        </div>
+
+        <!-- Фильтры -->
+        <div class="filters">
+            <button class="filter-btn active" onclick="filterPosts('all')">Все посты</button>
+            <button class="filter-btn" onclick="filterPosts('popular')">Популярные</button>
+            <button class="filter-btn" onclick="filterPosts('friends')">Друзья</button>
+        </div>
+        
+        <!-- Лента постов -->
+        <div id="postsContainer">
+            <div class="loading">Загрузка постов...</div>
+        </div>
+    </div>
+
+    <!-- Модальное окно комментариев -->
+    <div id="commentsModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeComments()">&times;</span>
+            <h3>💬 Комментарии</h3>
+            <div id="commentsList" class="comments-list"></div>
+            <div class="add-comment">
+                <input type="text" id="commentText" placeholder="Напишите комментарий..." onkeypress="handleCommentKeyPress(event)">
+                <button onclick="addComment()" class="btn">Отправить</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // База данных
+        function getLocalDB() {
+            const db = localStorage.getItem('social_network_db');
+            return db ? JSON.parse(db) : { users: [], posts: [], comments: [], friends: [], messages: [] };
+        }
+
+        function saveLocalDB(db) {
+            localStorage.setItem('social_network_db', JSON.stringify(db));
+        }
+
+        // Синхронизация с GitHub
+        async function syncWithGitHub() {
+            try {
+                const response = await fetch('https://raw.githubusercontent.com/ВАШ_НИК/my-social-network/main/database.json?t=' + Date.now());
+                const githubDB = await response.json();
+                const localDB = getLocalDB();
+                
+                const mergedDB = {
+                    users: [...new Map([...localDB.users, ...githubDB.users].map(user => [user.username, user])).values()],
+                    posts: [...new Map([...localDB.posts, ...githubDB.posts].map(post => [post.id, post])).values()],
+                    comments: [...new Map([...localDB.comments, ...githubDB.comments].map(comment => [comment.id, comment])).values()],
+                    friends: [...new Map([...localDB.friends, ...githubDB.friends].map(friend => [friend.id, friend])).values()],
+                    messages: [...new Map([...localDB.messages, ...githubDB.messages].map(msg => [msg.id, msg])).values()]
+                };
+                
+                saveLocalDB(mergedDB);
+                return mergedDB;
+            } catch (error) {
+                return getLocalDB();
+            }
+        }
+
+        let currentUser = null;
+        let database = { users: [], posts: [], comments: [], friends: [], messages: [] };
+        let currentPostId = null;
+
+        async function loadDatabase() {
+            database = await syncWithGitHub();
+            updateStats();
+        }
+
+        function checkAuth() {
+            currentUser = localStorage.getItem('currentUser');
+            if (!currentUser) {
+                window.location.href = 'login.html';
+                return;
+            }
+            document.getElementById('userWelcome').textContent = currentUser;
+        }
+
+        function updateStats() {
+            document.getElementById('postsCount').textContent = database.posts.length;
+            document.getElementById('usersCount').textContent = database.users.length;
+        }
+
+        function loadPosts(filter = 'all') {
+            const postsContainer = document.getElementById('postsContainer');
+            if (!postsContainer) return;
+            
+            postsContainer.innerHTML = '';
+            
+            let postsToShow = [...database.posts];
+            
+            if (filter === 'popular') {
+                postsToShow = postsToShow.sort((a, b) => (b.likes?.length || 0) - (a.likes?.length || 0));
+            } else if (filter === 'friends') {
+                const userFriends = database.friends.filter(f => f.user1 === currentUser || f.user2 === currentUser);
+                const friendUsernames = userFriends.map(f => f.user1 === currentUser ? f.user2 : f.user1);
+                postsToShow = postsToShow.filter(post => friendUsernames.includes(post.author));
+            }
+            
+            postsToShow = postsToShow.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+            
+            if (postsToShow.length === 0) {
+                postsContainer.innerHTML = '<div class="no-posts">😴 Пока нет постов. Будьте первым!</div>';
+                return;
+            }
+            
+            postsToShow.forEach(post => {
+                const hasLiked = post.likes && post.likes.includes(currentUser);
+                const postComments = database.comments.filter(c => c.postId === post.id);
+                const isMyPost = post.author === currentUser;
+                
+                const postElement = document.createElement('div');
+                postElement.className = 'post';
+                postElement.innerHTML = `
+                    <div class="post-header">
+                        <div class="user-info">
+                            <img src="https://ui-avatars.com/api/?name=${post.author}&background=667eea&color=fff" class="avatar">
+                            <div>
+                                <strong>${post.author}</strong>
+                                <div class="post-time">${timeAgo(new Date(post.timestamp))}</div>
+                            </div>
+                        </div>
+                        ${isMyPost ? `<button onclick="deletePost(${post.id})" class="delete-btn">🗑️</button>` : ''}
+                    </div>
+                    <div class="post-content">${formatPostContent(post.content)}</div>
+                    <div class="post-stats">
+                        <span>❤️ ${post.likes ? post.likes.length : 0}</span>
+                        <span>💬 ${postComments.length}</span>
+                        <span>👁️ ${post.views || 0}</span>
+                    </div>
+                    <div class="post-actions">
+                        <button onclick="likePost(${post.id})" class="action-btn ${hasLiked ? 'liked' : ''}">
+                            ${hasLiked ? '❤️' : '🤍'} Лайк
+                        </button>
+                        <button onclick="openComments(${post.id})" class="action-btn">💬 Комментировать</button>
+                        <button onclick="sharePost(${post.id})" class="action-btn">🔄 Поделиться</button>
+                    </div>
+                `;
+                
+                postsContainer.appendChild(postElement);
+            });
+        }
+
+        function filterPosts(type) {
+            document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+            loadPosts(type);
+        }
+
+        function formatPostContent(content) {
+            // Простые эмодзи и форматирование
+            return content
+                .replace(/:\)/g, '😊')
+                .replace(/:\(/g, '😢')
+                .replace(/<3/g, '❤️')
+                .replace(/!!!/g, '❗️')
+                .replace(/\n/g, '<br>');
+        }
+
+        function timeAgo(date) {
+            const now = new Date();
+            const diff = now - date;
+            const minutes = Math.floor(diff / 60000);
+            const hours = Math.floor(diff / 3600000);
+            const days = Math.floor(diff / 86400000);
+            
+            if (minutes < 1) return 'только что';
+            if (minutes < 60) return `${minutes} мин назад`;
+            if (hours < 24) return `${hours} ч назад`;
+            if (days < 7) return `${days} д назад`;
+            return date.toLocaleDateString();
+        }
+
+        function addEmoji(emoji) {
+            const textarea = document.getElementById('postText');
+            textarea.value += emoji;
+            textarea.focus();
+        }
+
+        async function createPost() {
+            const postText = document.getElementById('postText');
+            const content = postText.value.trim();
+            
+            if (!content) {
+                alert('Напишите что-нибудь!');
+                return;
+            }
+            
+            const newPost = {
+                id: Date.now(),
+                author: currentUser,
+                content: content,
+                timestamp: new Date().toISOString(),
+                likes: [],
+                views: 0
+            };
+            
+            database.posts.unshift(newPost);
+            saveLocalDB(database);
+            postText.value = '';
+            loadPosts();
+            
+            alert('✅ Пост опубликован!');
+        }
+
+        function likePost(postId) {
+            const post = database.posts.find(p => p.id === postId);
+            if (!post) return;
+            
+            if (!post.likes) post.likes = [];
+            
+            const userIndex = post.likes.indexOf(currentUser);
+            
+            if (userIndex === -1) {
+                post.likes.push(currentUser);
+            } else {
+                post.likes.splice(userIndex, 1);
+            }
+            
+            saveLocalDB(database);
+            loadPosts();
+        }
+
+        function deletePost(postId) {
+            if (!confirm('Удалить этот пост?')) return;
+            
+            database.posts = database.posts.filter(p => p.id !== postId);
+            database.comments = database.comments.filter(c => c.postId !== postId);
+            saveLocalDB(database);
+            loadPosts();
+        }
+
+        function sharePost(postId) {
+            alert('📤 Функция "Поделиться" будет доступна в следующем обновлении!');
+        }
+
+        // Комментарии
+        function openComments(postId) {
+            currentPostId = postId;
+            document.getElementById('commentsModal').style.display = 'block';
+            loadComments(postId);
+        }
+
+        function closeComments() {
+            document.getElementById('commentsModal').style.display = 'none';
+            currentPostId = null;
+        }
+
+        function loadComments(postId) {
+            const commentsList = document.getElementById('commentsList');
+            const postComments = database.comments.filter(c => c.postId === postId)
+                .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+            
+            commentsList.innerHTML = '';
+            
+            if (postComments.length === 0) {
+                commentsList.innerHTML = '<div class="no-comments">💬 Пока нет комментариев. Будьте первым!</div>';
+                return;
+            }
+            
+            postComments.forEach(comment => {
+                const commentElement = document.createElement('div');
+                commentElement.className = 'comment';
+                commentElement.innerHTML = `
+                    <div class="comment-header">
+                        <img src="https://ui-avatars.com/api/?name=${comment.author}&background=764ba2&color=fff" class="avatar-small">
+                        <strong>${comment.author}</strong>
+                        <span class="comment-time">${timeAgo(new Date(comment.timestamp))}</span>
+                    </div>
+                    <div class="comment-content">${comment.content}</div>
+                `;
+                commentsList.appendChild(commentElement);
+            });
+        }
+
+        function addComment() {
+            if (!currentPostId) return;
+            
+            const commentText = document.getElementById('commentText');
+            const content = commentText.value.trim();
+            
+            if (!content) {
+                alert('Введите комментарий!');
+                return;
+            }
+            
+            const newComment = {
+                id: Date.now(),
+                postId: currentPostId,
+                author: currentUser,
+                content: content,
+                timestamp: new Date().toISOString()
+            };
+            
+            if (!database.comments) database.comments = [];
+            database.comments.push(newComment);
+            saveLocalDB(database);
+            
+            commentText.value = '';
+            loadComments(currentPostId);
+            loadPosts(); // Обновляем счетчик комментариев
+        }
+
+        function handleCommentKeyPress(event) {
+            if (event.key === 'Enter') {
+                addComment();
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem('currentUser');
+            window.location.href = 'login.html';
+        }
+
+        // Запуск
+        async function init() {
+            await loadDatabase();
+            checkAuth();
+            loadPosts();
+        }
+
+        init();
+    </script>
+</body>
+</html>

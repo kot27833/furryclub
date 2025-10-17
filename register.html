@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Регистрация - MySocialNet</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="auth-container">
+        <div class="auth-header">
+            <h1>🐬 MySocialNet</h1>
+            <p>Создайте свой аккаунт всего за минуту!</p>
+        </div>
+
+        <div class="auth-form">
+            <h2>🎉 Регистрация</h2>
+            <form id="registerForm">
+                <input type="text" id="username" placeholder="👤 Придумайте ник" required>
+                <input type="password" id="password" placeholder="🔒 Придумайте пароль" required>
+                <input type="password" id="confirmPassword" placeholder="🔒 Повторите пароль" required>
+                <button type="submit" class="btn btn-large">🚀 Создать аккаунт</button>
+            </form>
+
+            <div class="password-requirements">
+                <h4>Требования к паролю:</h4>
+                <div class="requirement">✅ Не менее 4 символов</div>
+                <div class="requirement">✅ Уникальный ник</div>
+                <div class="requirement">✅ Без специальных символов</div>
+            </div>
+
+            <div class="auth-links">
+                <a href="login.html">🔐 Уже есть аккаунт? Войти</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function getLocalDB() {
+            const db = localStorage.getItem('social_network_db');
+            return db ? JSON.parse(db) : { users: [], posts: [], comments: [], friends: [], messages: [] };
+        }
+
+        function saveLocalDB(db) {
+            localStorage.setItem('social_network_db', JSON.stringify(db));
+        }
+
+        async function syncWithGitHub() {
+            try {
+                const response = await fetch('https://raw.githubusercontent.com/ВАШ_НИК/my-social-network/main/database.json?t=' + Date.now());
+                const githubDB = await response.json();
+                const localDB = getLocalDB();
+                
+                const mergedDB = {
+                    users: [...new Map([...localDB.users, ...githubDB.users].map(user => [user.username, user])).values()],
+                    posts: [...new Map([...localDB.posts, ...githubDB.posts].map(post => [post.id, post])).values()],
+                    comments: [...new Map([...localDB.comments, ...githubDB.comments].map(comment => [comment.id, comment])).values()],
+                    friends: [...new Map([...localDB.friends, ...githubDB.friends].map(friend => [friend.id, friend])).values()],
+                    messages: [...new Map([...localDB.messages, ...githubDB.messages].map(msg => [msg.id, msg])).values()]
+                };
+                
+                saveLocalDB(mergedDB);
+                return mergedDB;
+            } catch (error) {
+                return getLocalDB();
+            }
+        }
+
+        let database = { users: [], posts: [], comments: [], friends: [], messages: [] };
+
+        async function loadDatabase() {
+            database = await syncWithGitHub();
+        }
+
+        function isUsernameTaken(username) {
+            return database.users.some(user => user.username === username);
+        }
+
+        document.getElementById('registerForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            await loadDatabase();
+            
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+            
+            if (username.length < 3) {
+                alert('❌ Ник должен быть至少 3 символа!');
+                return;
+            }
+            
+            if (password.length < 4) {
+                alert('❌ Пароль должен быть至少 4 символа!');
+                return;
+            }
+            
+            if (password !== confirmPassword) {
+                alert('❌ Пароли не совпадают!');
+                return;
+            }
+            
+            if (isUsernameTaken(username)) {
+                alert('❌ Этот ник уже занят! Придумайте другой.');
+                return;
+            }
+            
+            // Регистрируем пользователя
+            const newUser = {
+                username: username,
+                password: password,
+                joined: new Date().toISOString(),
+                bio: '',
+                city: '',
+                birthday: ''
+            };
+            
+            database.users.push(newUser);
+            saveLocalDB(database);
+            
+            alert('🎉 Регистрация успешна! Теперь вы можете войти в аккаунт.');
+            window.location.href = 'login.html';
+        });
+
+        loadDatabase();
+    </script>
+
+    <style>
+        .password-requirements {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+            text-align: left;
+        }
+        .password-requirements h4 {
+            margin-top: 0;
+            color: #764ba2;
+        }
+        .requirement {
+            margin: 5px 0;
+            font-size: 14px;
+        }
+    </style>
+</body>
+</html>

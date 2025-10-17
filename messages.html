@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Сообщения - MySocialNet</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <h1>🐬 MySocialNet</h1>
+        <nav>
+            <a href="index.html" class="nav-btn">🏠 Лента</a>
+            <a href="profile.html" class="nav-btn">👤 Профиль</a>
+            <a href="friends.html" class="nav-btn">👥 Друзья</a>
+            <a href="messages.html" class="nav-btn active">💬 Сообщения</a>
+            <span id="userWelcome"></span>
+            <button onclick="logout()" class="btn logout-btn">🚪 Выйти</button>
+        </nav>
+    </header>
+
+    <div class="container">
+        <div class="messages-container">
+            <!-- Список чатов -->
+            <div class="chats-sidebar">
+                <div class="chats-header">
+                    <h3>💬 Чаты</h3>
+                    <button onclick="startNewChat()" class="btn btn-small">➕ Новый чат</button>
+                </div>
+                <div class="chats-list" id="chatsList">
+                    <!-- Чаты будут здесь -->
+                </div>
+            </div>
+
+            <!-- Область сообщений -->
+            <div class="messages-area">
+                <div class="chat-header" id="chatHeader">
+                    <div class="select-chat">
+                        <h3>👆 Выберите чат для общения</h3>
+                        <p>Начните общение с друзьями!</p>
+                    </div>
+                </div>
+
+                <div class="messages-list" id="messagesList">
+                    <div class="welcome-message">
+                        <h3>💬 Добро пожаловать в мессенджер!</h3>
+                        <p>Выберите чат слева чтобы начать общение</p>
+                        <div class="features-list">
+                            <div class="feature">✅ Мгновенные сообщения</div>
+                            <div class="feature">✅ Обмен эмодзи</div>
+                            <div class="feature">✅ История сообщений</div>
+                            <div class="feature">✅ Онлайн статусы</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="message-input-container" id="messageInputContainer" style="display: none;">
+                    <div class="message-input">
+                        <input type="text" id="messageText" placeholder="Введите сообщение..." onkeypress="handleMessageKeyPress(event)">
+                        <div class="emoji-buttons">
+                            <button onclick="addMessageEmoji('😊')" class="emoji-btn">😊</button>
+                            <button onclick="addMessageEmoji('😂')" class="emoji-btn">😂</button>
+                            <button onclick="addMessageEmoji('❤️')" class="emoji-btn">❤️</button>
+                            <button onclick="addMessageEmoji('👍')" class="emoji-btn">👍</button>
+                        </div>
+                        <button onclick="sendMessage()" class="btn send-btn">📤 Отправить</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно нового чата -->
+    <div id="newChatModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeNewChatModal()">&times;</span>
+            <h3>💬 Новый чат</h3>
+            <div class="friends-for-chat" id="friendsForChat">
+                <!-- Список друзей для чата -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentUser = null;
+        let database = { users: [], posts: [], comments: [], friends: [], messages: [] };
+        let currentChat = null;
+
+        async function loadDatabase() {
+            const db = localStorage.getItem('social_network_db');
+            database = db ? JSON.parse(db) : { users: [], posts: [], comments: [], friends: [], messages: [] };
+        }
+
+        function checkAuth() {
+            currentUser = localStorage.getItem('currentUser');
+            if (!currentUser) {
+                window.location.href = 'login.html';
+                return;
+            }
+            document.getElementById('userWelcome').textContent = currentUser;
+            loadChats();
+        }
+
+        function loadChats() {
+            const chatsList = document.getElementById('chatsList');
+            const userFriends = database.friends.filter(f => 
+                f.user1 === currentUser || f.user2 === currentUser
+            );
+            
+            chatsList.innerHTML = '';
+            
+            if (userFriends.length === 0) {
+                chatsList.innerHTML = '<div class="no-chats">😔 У вас пока нет друзей для общения</div>';
+                return;
+            }
+            
+            userFriends.forEach(friendship => {
+                const friendUsername = friendship.user1 === currentUser ? friendship.user2 : friendship.user1;
+                const chatMessages = database.messages.filter(m => 
+                    (m.sender === currentUser && m.receiver === friendUsername) ||
+                    (m.sender === friendUsername && m.receiver === currentUser)
+                );
+                
+                const lastMessage = chatMessages[chatMessages.length - 1];
+                const unreadCount = chatMessages.filter(m => 
+                    m.receiver === currentUser && !m.read
+                ).length;
+                
+                const chatElement = document.createElement('div');
+                chatElement.className = `chat-item ${currentChat === friendUsername ? 'active' : ''}`;
+                chatElement.onclick = () => openChat(friendUsername);
+                chatElement.innerHTML = `
+                    <img src="https://ui-avatars.com/api/?name=${friendUsername}&background=667eea&color=fff" class="avatar">
+                    <div class="chat-info">
+                        <div class="chat-header">
+                            <strong>${friendUsername}</strong>
+                            ${unreadCount > 0 ? `<span class="unread-badge">${unreadCount}</span>` : ''}
+                        </div>
+                        <div class="last-message">
+                            ${lastMessage ? (lastMessage.sender === currentUser ? 'Вы: ' : '') + lastMessage.content : 'Нет сообщений'}
+                        </div>
+                    </div>
+                `;
+                chatsList.appendChild(chatElement);
+            });
+        }
+
+        function openChat(friendUsername) {
+            currentChat = friendUsername;
+            
+            // Обновляем активный чат
+            document.querySelectorAll('.chat-item').forEach(item => item.classList.remove('active'));
+            event.currentTarget.classList.add('active');
+            
+            // Показываем заголовок чата
+            document.getElementById('chatHeader').innerHTML = `
+                <div class="active-chat-header">
+                    <img src="https://ui-avatars.com/api/?name=${friendUsername}&background=667eea&color=fff" class="avatar">
+                    <div class="chat-user-info">
+                        <strong>${friendUsername}</strong>
+                        <span class="user-status">🟢 В сети</span>
+                    </div>
+                    <button onclick="clearChat('${friendUsername}')" class="btn btn-small btn-danger">🗑️ Очистить чат</button>
+                </div>
+            `;
+            
+            // Показываем поле ввода
+            document.getElementById('messageInputContainer').style.display = 'block';
+            
+            // Загружаем сообщения
+            loadMessages(friendUsername);
+        }
+
+        function loadMessages(friendUsername) {
+            const messagesList = document.getElementById('messagesList');
+            const chatMessages = database.messages.filter(m => 
+                (m.sender === currentUser && m.receiver === friendUsername) ||
+                (m.sender === friendUsername && m.receiver === currentUser)
+            ).sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+            
+            messagesList.innerHTML = '';
+            
+            if (chatMessages.length === 0) {
+                messagesList.innerHTML = `
+                    <div class="no-messages">
+                        <h4>💬 Начните общение!</h4>
+                        <p>Отправьте первое сообщение ${friendUsername}</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            chatMessages.forEach(message => {
+                const isMyMessage = message.sender === currentUser;
+                const messageElement = document.createElement('div');
+                messageElement.className = `message ${isMyMessage ? 'my-message' : 'friend-message'}`;
+                messageElement.innerHTML = `
+                    <div class="message-content">${message.content}</div>
+                    <div class="message-time">${formatMessageTime(message.timestamp)}</div>
+                    ${isMyMessage ? '' : `<div class="message-sender">${message.sender}</div>`}
+                `;
+                messagesList.appendChild(messageElement);
+            });
+            
+            // Прокрутка вниз
+            messagesList.scrollTop = messagesList.scrollHeight;
+            
+            // Помечаем сообщения как прочитанные
+            markMessagesAsRead(friendUsername);
+        }
+
+        function formatMessageTime(timestamp) {
+            const date = new Date(timestamp);
+            const now = new Date();
+            const diff = now - date;
+            const minutes = Math.floor(diff / 60000);
+            const hours = Math.floor(diff / 3600000);
+            
+            if (minutes < 1) return 'только что';
+            if (minutes < 60) return `${minutes} мин назад`;
+            if (hours < 24) return `${hours} ч назад`;
+            return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        }
+
+        function sendMessage() {
+            if (!currentChat) {
+                alert('Выберите чат для отправки сообщения!');
+                return;
+            }
+            
+            const messageText = document.getElementById('messageText');
+            const content = messageText.value.trim();
+            
+            if (!content) {
+                alert('Введите сообщение!');
+                return;
+            }
+            
+            const newMessage = {
+                id: Date.now(),
+                sender: currentUser,
+                receiver: currentChat,
+                content: content,
+                timestamp: new Date().toISOString(),
+                read: false
+            };
+            
+            if (!database.messages) database.messages = [];
+            database.messages.push(newMessage);
+            localStorage.setItem('social_network_db', JSON.stringify(database));
+            
+            messageText.value = '';
+            loadMessages(currentChat);
+            loadChats(); // Обновляем список чатов
+        }
+
+        function addMessageEmoji(emoji) {
+            const messageText = document.getElementById('messageText');
+            messageText.value += emoji;
+            messageText.focus();
+        }
+
+        function handleMessageKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        }
+
+        function markMessagesAsRead(friendUsername) {
+            database.messages.forEach(message => {
+                if (message.receiver === currentUser && message.sender === friendUsername && !message.read) {
+                    message.read = true;
+                }
+            });
+            localStorage.setItem('social_network_db', JSON.stringify(database));
+            loadChats();
+        }
+
+        function clearChat(friendUsername) {
+            if (!confirm('Очистить всю историю переписки?')) return;
+            
+            database.messages = database.messages.filter(m => 
+                !((m.sender === currentUser && m.receiver === friendUsername) ||
+                  (m.sender === friendUsername && m.receiver === currentUser))
+            );
+            
+            localStorage.setItem('social_network_db', JSON.stringify(database));
+            loadMessages(friendUsername);
+            loadChats();
+        }
+
+        function startNewChat() {
+            const modal = document.getElementById('newChatModal');
+            const friendsList = document.getElementById('friendsForChat');
+            const userFriends = database.friends.filter(f => 
+                f.user1 === currentUser || f.user2 === currentUser
+            );
+            
+            friendsList.innerHTML = '';
+            
+            if (userFriends.length === 0) {
+                friendsList.innerHTML = '<div class="no-friends">😔 У вас пока нет друзей</div>';
+            } else {
+                userFriends.forEach(friendship => {
+                    const friendUsername = friendship.user1 === currentUser ? friendship.user2 : friendship.user1;
+                    const friendElement = document.createElement('div');
+                    friendElement.className = 'friend-for-chat';
+                    friendElement.onclick = () => {
+                        openChat(friendUsername);
+                        closeNewChatModal();
+                    };
+                    friendElement.innerHTML = `
+                        <img src="https://ui-avatars.com/api/?name=${friendUsername}&background=667eea&color=fff" class="avatar">
+                        <strong>${friendUsername}</strong>
+                        <span class="chat-action">💬 Начать чат</span>
+                    `;
+                    friendsList.appendChild(friendElement);
+                });
+            }
+            
+            modal.style.display = 'block';
+        }
+
+        function closeNewChatModal() {
+            document.getElementById('newChatModal').style.display = 'none';
+        }
+
+        function logout() {
+            localStorage.removeItem('currentUser');
+            window.location.href = 'login.html';
+        }
+
+        // Закрытие модального окна при клике вне его
+        window.onclick = function(event) {
+            const modal = document.getElementById('newChatModal');
+            if (event.target == modal) {
+                closeNewChatModal();
+            }
+        }
+
+        async function init() {
+            await loadDatabase();
+            checkAuth();
+        }
+
+        init();
+    </script>
+</body>
+</html>
