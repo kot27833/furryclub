@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Сообщения</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <h1>💬 Сообщения</h1>
+        <div>
+            <a href="index.html" class="btn">Лента</a>
+            <a href="friends.html" class="btn">Друзья</a>
+            <button onclick="logout()" class="btn">Выйти</button>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="chat-container">
+            <div class="chat-header">
+                <h3 id="chatWith">Выберите собеседника</h3>
+            </div>
+            
+            <div class="friends-sidebar">
+                <h4>Ваши друзья</h4>
+                <div id="friendsChatList"></div>
+            </div>
+            
+            <div class="messages-area">
+                <div id="messagesList" class="messages-list"></div>
+                
+                <div class="message-input">
+                    <input type="text" id="messageText" placeholder="Введите сообщение..." onkeypress="handleKeyPress(event)">
+                    <button onclick="sendMessage()" class="btn">Отправить</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentChatWith = null;
+
+        function checkAuth() {
+            const currentUser = localStorage.getItem('currentUser');
+            if (!currentUser) {
+                window.location.href = 'login.html';
+                return;
+            }
+            
+            currentChatWith = localStorage.getItem('chatWith');
+            if (currentChatWith) {
+                loadChat(currentChatWith);
+            }
+            
+            loadFriendsList();
+        }
+
+        function getMessages() {
+            const messages = localStorage.getItem('messages');
+            return messages ? JSON.parse(messages) : {};
+        }
+
+        function saveMessages(messages) {
+            localStorage.setItem('messages', JSON.stringify(messages));
+        }
+
+        function getFriends() {
+            const friends = localStorage.getItem('friends');
+            return friends ? JSON.parse(friends) : {};
+        }
+
+        function loadFriendsList() {
+            const friendsList = document.getElementById('friendsChatList');
+            const friendsData = getFriends();
+            const currentUser = localStorage.getItem('currentUser');
+            
+            friendsList.innerHTML = '';
+            
+            const myFriends = friendsData[currentUser] || [];
+            
+            if (myFriends.length === 0) {
+                friendsList.innerHTML = '<p>У вас пока нет друзей</p>';
+                return;
+            }
+            
+            myFriends.forEach(friend => {
+                const friendElement = document.createElement('div');
+                friendElement.className = `friend-chat-item ${friend === currentChatWith ? 'active' : ''}`;
+                friendElement.innerHTML = `
+                    <div class="friend-avatar">👤</div>
+                    <div class="friend-name">${friend}</div>
+                `;
+                friendElement.onclick = () => loadChat(friend);
+                friendsList.appendChild(friendElement);
+            });
+        }
+
+        function loadChat(friendUsername) {
+            currentChatWith = friendUsername;
+            localStorage.setItem('chatWith', friendUsername);
+            document.getElementById('chatWith').textContent = `Чат с ${friendUsername}`;
+            
+            // Обновляем активный элемент в списке друзей
+            document.querySelectorAll('.friend-chat-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            document.querySelectorAll('.friend-chat-item').forEach(item => {
+                if (item.querySelector('.friend-name').textContent === friendUsername) {
+                    item.classList.add('active');
+                }
+            });
+            
+            const messages = getMessages();
+            const currentUser = localStorage.getItem('currentUser');
+            const chatId = [currentUser, friendUsername].sort().join('_');
+            
+            const messagesList = document.getElementById('messagesList');
+            messagesList.innerHTML = '';
+            
+            if (!messages[chatId] || messages[chatId].length === 0) {
+                messagesList.innerHTML = '<p class="no-messages">Нет сообщений. Начните общение!</p>';
+                return;
+            }
+            
+            messages[chatId].forEach(msg => {
+                const messageElement = document.createElement('div');
+                messageElement.className = `message ${msg.sender === currentUser ? 'my-message' : 'friend-message'}`;
+                messageElement.innerHTML = `
+                    <div class="message-content">${msg.text}</div>
+                    <div class="message-time">${new Date(msg.timestamp).toLocaleTimeString()}</div>
+                `;
+                messagesList.appendChild(messageElement);
+            });
+            
+            // Прокрутка вниз
+            messagesList.scrollTop = messagesList.scrollHeight;
+        }
+
+        function sendMessage() {
+            if (!currentChatWith) {
+                alert('Выберите собеседника');
+                return;
+            }
+            
+            const messageText = document.getElementById('messageText');
+            const text = messageText.value.trim();
+            
+            if (!text) {
+                alert('Введите сообщение');
+                return;
+            }
+            
+            const messages = getMessages();
+            const currentUser = localStorage.getItem('currentUser');
+            const chatId = [currentUser, currentChatWith].sort().join('_');
+            
+            if (!messages[chatId]) messages[chatId] = [];
+            
+            messages[chatId].push({
+                sender: currentUser,
+                text: text,
+                timestamp: new Date().toISOString()
+            });
+            
+            saveMessages(messages);
+            messageText.value = '';
+            loadChat(currentChatWith);
+        }
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem('currentUser');
+            localStorage.removeItem('chatWith');
+            window.location.href = 'login.html';
+        }
+
+        checkAuth();
+    </script>
+</body>
+</html>
