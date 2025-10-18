@@ -58,6 +58,51 @@ window.supabaseAPI = {
         }
     },
 
+    // Получить данные пользователя
+    async getUser(username) {
+        const response = await fetch(SUPABASE_URL + `/rest/v1/users?username=eq.${username}&select=*`, {
+            headers: {
+                'apikey': SUPABASE_ANON_KEY,
+                'Authorization': 'Bearer ' + SUPABASE_ANON_KEY
+            }
+        });
+        
+        const data = await response.json();
+        return data[0];
+    },
+
+    // Обновить профиль
+    async updateProfile(username, bio, city, birthday) {
+        await fetch(SUPABASE_URL + `/rest/v1/users?username=eq.${username}`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'apikey': SUPABASE_ANON_KEY,
+                'Authorization': 'Bearer ' + SUPABASE_ANON_KEY
+            },
+            body: JSON.stringify({
+                bio: bio,
+                city: city,
+                birthday: birthday
+            })
+        });
+    },
+
+    // Сменить пароль
+    async changePassword(username, newPassword) {
+        await fetch(SUPABASE_URL + `/rest/v1/users?username=eq.${username}`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'apikey': SUPABASE_ANON_KEY,
+                'Authorization': 'Bearer ' + SUPABASE_ANON_KEY
+            },
+            body: JSON.stringify({
+                password: newPassword
+            })
+        });
+    },
+
     // Создать пост
     async createPost(content, author) {
         const response = await fetch(SUPABASE_URL + '/rest/v1/posts', {
@@ -82,6 +127,19 @@ window.supabaseAPI = {
     // Получить посты
     async getPosts() {
         const response = await fetch(SUPABASE_URL + '/rest/v1/posts?select=*&order=created_at.desc', {
+            headers: {
+                'apikey': SUPABASE_ANON_KEY,
+                'Authorization': 'Bearer ' + SUPABASE_ANON_KEY
+            }
+        });
+        
+        const data = await response.json();
+        return data || [];
+    },
+
+    // Получить посты пользователя
+    async getUserPosts(username) {
+        const response = await fetch(SUPABASE_URL + `/rest/v1/posts?author=eq.${username}&select=*&order=created_at.desc`, {
             headers: {
                 'apikey': SUPABASE_ANON_KEY,
                 'Authorization': 'Bearer ' + SUPABASE_ANON_KEY
@@ -242,7 +300,7 @@ window.supabaseAPI = {
 
     // Получить всех пользователей
     async getAllUsers() {
-        const response = await fetch(SUPABASE_URL + '/rest/v1/users?select=username,created_at&order=created_at.desc', {
+        const response = await fetch(SUPABASE_URL + '/rest/v1/users?select=username,created_at,bio,city&order=created_at.desc', {
             headers: {
                 'apikey': SUPABASE_ANON_KEY,
                 'Authorization': 'Bearer ' + SUPABASE_ANON_KEY
@@ -262,5 +320,52 @@ window.supabaseAPI = {
                 'Authorization': 'Bearer ' + SUPABASE_ANON_KEY
             }
         });
+    },
+
+    // Отправить сообщение
+    async sendMessage(sender, receiver, content) {
+        const response = await fetch(SUPABASE_URL + '/rest/v1/messages', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'apikey': SUPABASE_ANON_KEY,
+                'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+                'Prefer': 'return=representation'
+            },
+            body: JSON.stringify({
+                sender: sender,
+                receiver: receiver,
+                content: content
+            })
+        });
+        
+        const data = await response.json();
+        return data[0];
+    },
+
+    // Получить сообщения
+    async getMessages(user1, user2) {
+        const response = await fetch(SUPABASE_URL + `/rest/v1/messages?or=(and(sender.eq.${user1},receiver.eq.${user2}),and(sender.eq.${user2},receiver.eq.${user1}))&select=*&order=created_at.asc`, {
+            headers: {
+                'apikey': SUPABASE_ANON_KEY,
+                'Authorization': 'Bearer ' + SUPABASE_ANON_KEY
+            }
+        });
+        
+        const data = await response.json();
+        return data || [];
+    },
+
+    // Получить чаты пользователя
+    async getChats(username) {
+        const response = await fetch(SUPABASE_URL + `/rest/v1/messages?select=sender,receiver,content,created_at&or=(sender.eq.${username},receiver.eq.${username})&order=created_at.desc`, {
+            headers: {
+                'apikey': SUPABASE_ANON_KEY,
+                'Authorization': 'Bearer ' + SUPABASE_ANON_KEY
+            }
+        });
+        
+        const data = await response.json();
+        return data || [];
     }
 };
