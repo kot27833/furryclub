@@ -53,7 +53,6 @@
         <div class="filters">
             <button class="filter-btn active" onclick="filterPosts('all')">Все посты</button>
             <button class="filter-btn" onclick="filterPosts('popular')">Популярные</button>
-            <button class="filter-btn" onclick="filterPosts('friends')">Друзья</button>
         </div>
         
         <!-- Лента постов -->
@@ -75,301 +74,263 @@
         </div>
     </div>
 
-    <script>
-        // База данных
-        function getLocalDB() {
-            const db = localStorage.getItem('social_network_db');
-            return db ? JSON.parse(db) : { users: [], posts: [], comments: [], friends: [], messages: [] };
-        }
+    <script type="module">
+        import { postsAPI, likesAPI, commentsAPI, authAPI } from './supabase.js'
 
-        function saveLocalDB(db) {
-            localStorage.setItem('social_network_db', JSON.stringify(db));
-        }
-
-        // Синхронизация с GitHub
-        async function syncWithGitHub() {
-            try {
-                const response = await fetch('https://raw.githubusercontent.com/ВАШ_НИК/my-social-network/main/database.json?t=' + Date.now());
-                const githubDB = await response.json();
-                const localDB = getLocalDB();
-                
-                const mergedDB = {
-                    users: [...new Map([...localDB.users, ...githubDB.users].map(user => [user.username, user])).values()],
-                    posts: [...new Map([...localDB.posts, ...githubDB.posts].map(post => [post.id, post])).values()],
-                    comments: [...new Map([...localDB.comments, ...githubDB.comments].map(comment => [comment.id, comment])).values()],
-                    friends: [...new Map([...localDB.friends, ...githubDB.friends].map(friend => [friend.id, friend])).values()],
-                    messages: [...new Map([...localDB.messages, ...githubDB.messages].map(msg => [msg.id, msg])).values()]
-                };
-                
-                saveLocalDB(mergedDB);
-                return mergedDB;
-            } catch (error) {
-                return getLocalDB();
-            }
-        }
-
-        let currentUser = null;
-        let database = { users: [], posts: [], comments: [], friends: [], messages: [] };
-        let currentPostId = null;
-
-        async function loadDatabase() {
-            database = await syncWithGitHub();
-            updateStats();
-        }
+        let currentUser = null
+        let currentPostId = null
 
         function checkAuth() {
-            currentUser = localStorage.getItem('currentUser');
+            currentUser = localStorage.getItem('currentUser')
             if (!currentUser) {
-                window.location.href = 'login.html';
-                return;
+                window.location.href = 'login.html'
+                return
             }
-            document.getElementById('userWelcome').textContent = currentUser;
+            document.getElementById('userWelcome').textContent = currentUser
         }
 
-        function updateStats() {
-            document.getElementById('postsCount').textContent = database.posts.length;
-            document.getElementById('usersCount').textContent = database.users.length;
-        }
-
-        function loadPosts(filter = 'all') {
-            const postsContainer = document.getElementById('postsContainer');
-            if (!postsContainer) return;
-            
-            postsContainer.innerHTML = '';
-            
-            let postsToShow = [...database.posts];
-            
-            if (filter === 'popular') {
-                postsToShow = postsToShow.sort((a, b) => (b.likes?.length || 0) - (a.likes?.length || 0));
-            } else if (filter === 'friends') {
-                const userFriends = database.friends.filter(f => f.user1 === currentUser || f.user2 === currentUser);
-                const friendUsernames = userFriends.map(f => f.user1 === currentUser ? f.user2 : f.user1);
-                postsToShow = postsToShow.filter(post => friendUsernames.includes(post.author));
-            }
-            
-            postsToShow = postsToShow.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-            
-            if (postsToShow.length === 0) {
-                postsContainer.innerHTML = '<div class="no-posts">😴 Пока нет постов. Будьте первым!</div>';
-                return;
-            }
-            
-            postsToShow.forEach(post => {
-                const hasLiked = post.likes && post.likes.includes(currentUser);
-                const postComments = database.comments.filter(c => c.postId === post.id);
-                const isMyPost = post.author === currentUser;
+        async function updateStats() {
+            try {
+                const posts = await postsAPI.getPosts()
+                const users = await authAPI.getAllUsers()
                 
-                const postElement = document.createElement('div');
-                postElement.className = 'post';
-                postElement.innerHTML = `
-                    <div class="post-header">
-                        <div class="user-info">
-                            <img src="https://ui-avatars.com/api/?name=${post.author}&background=667eea&color=fff" class="avatar">
-                            <div>
-                                <strong>${post.author}</strong>
-                                <div class="post-time">${timeAgo(new Date(post.timestamp))}</div>
+                document.getElementById('postsCount').textContent = posts.length
+                document.getElementById('usersCount').textContent = users.length
+            } catch (error) {
+                console.error('Ошибка загрузки статистики:', error)
+            }
+        }
+
+        async function loadPosts(filter = 'all') {
+            const postsContainer = document.getElementById('postsContainer')
+            if (!postsContainer) return
+            
+            postsContainer.innerHTML = '<div class="loading">Загрузка постов...</div>'
+            
+            try {
+                let posts = await postsAPI.getPosts()
+                
+                if (filter === 'popular') {
+                    posts = posts.sort((a, b) => b.likes_count - a.likes_count)
+                }
+                
+                if (posts.length === 0) {
+                    postsContainer.innerHTML = '<div class="no-posts">😴 Пока нет постов. Будьте первым!</div>'
+                    return
+                }
+                
+                postsContainer.innerHTML = ''
+                
+                for (const post of posts) {
+                    const likes = await likesAPI.getPostLikes(post.id)
+                    const hasLiked = await likesAPI.hasLiked(post.id, currentUser)
+                    const postComments = await commentsAPI.getComments(post.id)
+                    const isMyPost = post.author === currentUser
+                    
+                    const postElement = document.createElement('div')
+                    postElement.className = 'post'
+                    postElement.innerHTML = `
+                        <div class="post-header">
+                            <div class="user-info">
+                                <img src="https://ui-avatars.com/api/?name=${post.author}&background=667eea&color=fff" class="avatar">
+                                <div>
+                                    <strong>${post.author}</strong>
+                                    <div class="post-time">${timeAgo(new Date(post.created_at))}</div>
+                                </div>
                             </div>
+                            ${isMyPost ? `<button onclick="deletePost(${post.id})" class="delete-btn">🗑️</button>` : ''}
                         </div>
-                        ${isMyPost ? `<button onclick="deletePost(${post.id})" class="delete-btn">🗑️</button>` : ''}
-                    </div>
-                    <div class="post-content">${formatPostContent(post.content)}</div>
-                    <div class="post-stats">
-                        <span>❤️ ${post.likes ? post.likes.length : 0}</span>
-                        <span>💬 ${postComments.length}</span>
-                        <span>👁️ ${post.views || 0}</span>
-                    </div>
-                    <div class="post-actions">
-                        <button onclick="likePost(${post.id})" class="action-btn ${hasLiked ? 'liked' : ''}">
-                            ${hasLiked ? '❤️' : '🤍'} Лайк
-                        </button>
-                        <button onclick="openComments(${post.id})" class="action-btn">💬 Комментировать</button>
-                        <button onclick="sharePost(${post.id})" class="action-btn">🔄 Поделиться</button>
-                    </div>
-                `;
-                
-                postsContainer.appendChild(postElement);
-            });
+                        <div class="post-content">${formatPostContent(post.content)}</div>
+                        <div class="post-stats">
+                            <span>❤️ ${likes.length}</span>
+                            <span>💬 ${postComments.length}</span>
+                        </div>
+                        <div class="post-actions">
+                            <button onclick="likePost(${post.id})" class="action-btn ${hasLiked ? 'liked' : ''}">
+                                ${hasLiked ? '❤️' : '🤍'} Лайк
+                            </button>
+                            <button onclick="openComments(${post.id})" class="action-btn">💬 Комментировать</button>
+                        </div>
+                    `
+                    postsContainer.appendChild(postElement)
+                }
+            } catch (error) {
+                console.error('Ошибка загрузки постов:', error)
+                postsContainer.innerHTML = '<div class="no-posts">❌ Ошибка загрузки постов</div>'
+            }
         }
 
         function filterPosts(type) {
-            document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
-            event.target.classList.add('active');
-            loadPosts(type);
+            document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'))
+            event.target.classList.add('active')
+            loadPosts(type)
         }
 
         function formatPostContent(content) {
-            // Простые эмодзи и форматирование
             return content
                 .replace(/:\)/g, '😊')
                 .replace(/:\(/g, '😢')
                 .replace(/<3/g, '❤️')
                 .replace(/!!!/g, '❗️')
-                .replace(/\n/g, '<br>');
+                .replace(/\n/g, '<br>')
         }
 
         function timeAgo(date) {
-            const now = new Date();
-            const diff = now - date;
-            const minutes = Math.floor(diff / 60000);
-            const hours = Math.floor(diff / 3600000);
-            const days = Math.floor(diff / 86400000);
+            const now = new Date()
+            const diff = now - date
+            const minutes = Math.floor(diff / 60000)
+            const hours = Math.floor(diff / 3600000)
+            const days = Math.floor(diff / 86400000)
             
-            if (minutes < 1) return 'только что';
-            if (minutes < 60) return `${minutes} мин назад`;
-            if (hours < 24) return `${hours} ч назад`;
-            if (days < 7) return `${days} д назад`;
-            return date.toLocaleDateString();
+            if (minutes < 1) return 'только что'
+            if (minutes < 60) return `${minutes} мин назад`
+            if (hours < 24) return `${hours} ч назад`
+            if (days < 7) return `${days} д назад`
+            return date.toLocaleDateString()
         }
 
         function addEmoji(emoji) {
-            const textarea = document.getElementById('postText');
-            textarea.value += emoji;
-            textarea.focus();
+            const textarea = document.getElementById('postText')
+            textarea.value += emoji
+            textarea.focus()
         }
 
         async function createPost() {
-            const postText = document.getElementById('postText');
-            const content = postText.value.trim();
+            const postText = document.getElementById('postText')
+            const content = postText.value.trim()
             
             if (!content) {
-                alert('Напишите что-нибудь!');
-                return;
+                alert('Напишите что-нибудь!')
+                return
             }
             
-            const newPost = {
-                id: Date.now(),
-                author: currentUser,
-                content: content,
-                timestamp: new Date().toISOString(),
-                likes: [],
-                views: 0
-            };
-            
-            database.posts.unshift(newPost);
-            saveLocalDB(database);
-            postText.value = '';
-            loadPosts();
-            
-            alert('✅ Пост опубликован!');
-        }
-
-        function likePost(postId) {
-            const post = database.posts.find(p => p.id === postId);
-            if (!post) return;
-            
-            if (!post.likes) post.likes = [];
-            
-            const userIndex = post.likes.indexOf(currentUser);
-            
-            if (userIndex === -1) {
-                post.likes.push(currentUser);
-            } else {
-                post.likes.splice(userIndex, 1);
+            try {
+                await postsAPI.createPost(content, currentUser)
+                postText.value = ''
+                loadPosts()
+                updateStats()
+                alert('✅ Пост опубликован!')
+            } catch (error) {
+                alert('❌ Ошибка публикации: ' + error.message)
             }
-            
-            saveLocalDB(database);
-            loadPosts();
         }
 
-        function deletePost(postId) {
-            if (!confirm('Удалить этот пост?')) return;
-            
-            database.posts = database.posts.filter(p => p.id !== postId);
-            database.comments = database.comments.filter(c => c.postId !== postId);
-            saveLocalDB(database);
-            loadPosts();
+        async function likePost(postId) {
+            try {
+                const hasLiked = await likesAPI.hasLiked(postId, currentUser)
+                
+                if (hasLiked) {
+                    await likesAPI.unlikePost(postId, currentUser)
+                } else {
+                    await likesAPI.likePost(postId, currentUser)
+                }
+                
+                // Обновляем счетчик лайков
+                const likes = await likesAPI.getPostLikes(postId)
+                await postsAPI.updateLikes(postId, likes.length)
+                
+                loadPosts()
+            } catch (error) {
+                alert('❌ Ошибка лайка: ' + error.message)
+            }
         }
 
-        function sharePost(postId) {
-            alert('📤 Функция "Поделиться" будет доступна в следующем обновлении!');
+        async function deletePost(postId) {
+            if (!confirm('Удалить этот пост?')) return
+            
+            try {
+                await postsAPI.deletePost(postId, currentUser)
+                loadPosts()
+                updateStats()
+            } catch (error) {
+                alert('❌ Ошибка удаления: ' + error.message)
+            }
         }
 
         // Комментарии
-        function openComments(postId) {
-            currentPostId = postId;
-            document.getElementById('commentsModal').style.display = 'block';
-            loadComments(postId);
+        async function openComments(postId) {
+            currentPostId = postId
+            document.getElementById('commentsModal').style.display = 'block'
+            await loadComments(postId)
         }
 
         function closeComments() {
-            document.getElementById('commentsModal').style.display = 'none';
-            currentPostId = null;
+            document.getElementById('commentsModal').style.display = 'none'
+            currentPostId = null
         }
 
-        function loadComments(postId) {
-            const commentsList = document.getElementById('commentsList');
-            const postComments = database.comments.filter(c => c.postId === postId)
-                .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+        async function loadComments(postId) {
+            const commentsList = document.getElementById('commentsList')
             
-            commentsList.innerHTML = '';
-            
-            if (postComments.length === 0) {
-                commentsList.innerHTML = '<div class="no-comments">💬 Пока нет комментариев. Будьте первым!</div>';
-                return;
+            try {
+                const comments = await commentsAPI.getComments(postId)
+                
+                commentsList.innerHTML = ''
+                
+                if (comments.length === 0) {
+                    commentsList.innerHTML = '<div class="no-comments">💬 Пока нет комментариев. Будьте первым!</div>'
+                    return
+                }
+                
+                comments.forEach(comment => {
+                    const commentElement = document.createElement('div')
+                    commentElement.className = 'comment'
+                    commentElement.innerHTML = `
+                        <div class="comment-header">
+                            <img src="https://ui-avatars.com/api/?name=${comment.author}&background=764ba2&color=fff" class="avatar-small">
+                            <strong>${comment.author}</strong>
+                            <span class="comment-time">${timeAgo(new Date(comment.created_at))}</span>
+                        </div>
+                        <div class="comment-content">${comment.content}</div>
+                    `
+                    commentsList.appendChild(commentElement)
+                })
+            } catch (error) {
+                console.error('Ошибка загрузки комментариев:', error)
+                commentsList.innerHTML = '<div class="no-comments">❌ Ошибка загрузки комментариев</div>'
             }
-            
-            postComments.forEach(comment => {
-                const commentElement = document.createElement('div');
-                commentElement.className = 'comment';
-                commentElement.innerHTML = `
-                    <div class="comment-header">
-                        <img src="https://ui-avatars.com/api/?name=${comment.author}&background=764ba2&color=fff" class="avatar-small">
-                        <strong>${comment.author}</strong>
-                        <span class="comment-time">${timeAgo(new Date(comment.timestamp))}</span>
-                    </div>
-                    <div class="comment-content">${comment.content}</div>
-                `;
-                commentsList.appendChild(commentElement);
-            });
         }
 
-        function addComment() {
-            if (!currentPostId) return;
+        async function addComment() {
+            if (!currentPostId) return
             
-            const commentText = document.getElementById('commentText');
-            const content = commentText.value.trim();
+            const commentText = document.getElementById('commentText')
+            const content = commentText.value.trim()
             
             if (!content) {
-                alert('Введите комментарий!');
-                return;
+                alert('Введите комментарий!')
+                return
             }
             
-            const newComment = {
-                id: Date.now(),
-                postId: currentPostId,
-                author: currentUser,
-                content: content,
-                timestamp: new Date().toISOString()
-            };
-            
-            if (!database.comments) database.comments = [];
-            database.comments.push(newComment);
-            saveLocalDB(database);
-            
-            commentText.value = '';
-            loadComments(currentPostId);
-            loadPosts(); // Обновляем счетчик комментариев
+            try {
+                await commentsAPI.addComment(currentPostId, content, currentUser)
+                commentText.value = ''
+                await loadComments(currentPostId)
+                loadPosts() // Обновляем счетчик комментариев
+            } catch (error) {
+                alert('❌ Ошибка комментария: ' + error.message)
+            }
         }
 
         function handleCommentKeyPress(event) {
             if (event.key === 'Enter') {
-                addComment();
+                addComment()
             }
         }
 
         function logout() {
-            localStorage.removeItem('currentUser');
-            window.location.href = 'login.html';
+            localStorage.removeItem('currentUser')
+            window.location.href = 'login.html'
         }
 
         // Запуск
         async function init() {
-            await loadDatabase();
-            checkAuth();
-            loadPosts();
+            checkAuth()
+            await updateStats()
+            await loadPosts()
         }
 
-        init();
+        init()
     </script>
 </body>
 </html>
