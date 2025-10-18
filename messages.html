@@ -79,7 +79,7 @@
     </div>
 
     <script type="module">
-        import { friendsAPI } from './supabase.js'
+        import { getFriends } from './supabase.js'
 
         let currentUser = null
         let currentChat = null
@@ -102,7 +102,7 @@
             chatsList.innerHTML = '<div class="loading">Загрузка чатов...</div>'
             
             try {
-                const userFriends = await friendsAPI.getFriends(currentUser)
+                const userFriends = await getFriends(currentUser)
                 
                 chatsList.innerHTML = ''
                 
@@ -276,7 +276,7 @@
             const friendsList = document.getElementById('friendsForChat')
             
             try {
-                const userFriends = await friendsAPI.getFriends(currentUser)
+                const userFriends = await getFriends(currentUser)
                 
                 friendsList.innerHTML = ''
                 
@@ -303,7 +303,7 @@
                 modal.style.display = 'block'
             } catch (error) {
                 console.error('Ошибка загрузки друзей:', error)
-                friendsList.innerHTML = '<div class="no-friends">❌ Ошибка загрузки друзей</div>'
+                friendsList.innerHTML = '<div class="no-friends'>❌ Ошибка загрузки друзей</div>'
             }
         }
 
