@@ -34,7 +34,7 @@
     </div>
 
     <script type="module">
-        import { authAPI } from './supabase.js'
+        import { loginUser } from './supabase.js'
 
         document.getElementById('loginForm').addEventListener('submit', async function(e) {
             e.preventDefault()
@@ -43,7 +43,7 @@
             const password = document.getElementById('password').value
             
             try {
-                const user = await authAPI.signIn(username, password)
+                const user = await loginUser(username, password)
                 
                 // Сохраняем информацию о пользователе
                 localStorage.setItem('currentUser', user.username)
