@@ -302,7 +302,7 @@
                 await addComment(currentPostId, content, currentUser)
                 commentText.value = ''
                 await loadComments(currentPostId)
-                loadPosts() // Обновляем счетчик комментариев
+                loadPosts()
             } catch (error) {
                 alert('❌ Ошибка комментария: ' + error.message)
             }
