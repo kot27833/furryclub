@@ -74,9 +74,8 @@
         </div>
     </div>
 
-    <script type="module">
-        import { createPost, getPosts, likePost, unlikePost, hasLiked, getPostLikes, addComment, getComments, deletePost, getAllUsers } from './supabase.js'
-
+    <script src="./supabase.js"></script>
+    <script>
         let currentUser = null
         let currentPostId = null
 
@@ -91,8 +90,8 @@
 
         async function updateStats() {
             try {
-                const posts = await getPosts()
-                const users = await getAllUsers()
+                const posts = await window.supabaseAPI.getPosts()
+                const users = await window.supabaseAPI.getAllUsers()
                 
                 document.getElementById('postsCount').textContent = posts.length
                 document.getElementById('usersCount').textContent = users.length
@@ -108,7 +107,7 @@
             postsContainer.innerHTML = '<div class="loading">Загрузка постов...</div>'
             
             try {
-                let posts = await getPosts()
+                let posts = await window.supabaseAPI.getPosts()
                 
                 if (filter === 'popular') {
                     posts = posts.sort((a, b) => b.likes_count - a.likes_count)
@@ -122,9 +121,9 @@
                 postsContainer.innerHTML = ''
                 
                 for (const post of posts) {
-                    const likes = await getPostLikes(post.id)
-                    const hasLikedPost = await hasLiked(post.id, currentUser)
-                    const postComments = await getComments(post.id)
+                    const likes = await window.supabaseAPI.getPostLikes(post.id)
+                    const hasLikedPost = await window.supabaseAPI.hasLiked(post.id, currentUser)
+                    const postComments = await window.supabaseAPI.getComments(post.id)
                     const isMyPost = post.author === currentUser
                     
                     const postElement = document.createElement('div')
@@ -205,7 +204,7 @@
             }
             
             try {
-                await createPost(content, currentUser)
+                await window.supabaseAPI.createPost(content, currentUser)
                 postText.value = ''
                 loadPosts()
                 updateStats()
@@ -217,12 +216,12 @@
 
         async function toggleLike(postId) {
             try {
-                const hasLikedPost = await hasLiked(postId, currentUser)
+                const hasLikedPost = await window.supabaseAPI.hasLiked(postId, currentUser)
                 
                 if (hasLikedPost) {
-                    await unlikePost(postId, currentUser)
+                    await window.supabaseAPI.unlikePost(postId, currentUser)
                 } else {
-                    await likePost(postId, currentUser)
+                    await window.supabaseAPI.likePost(postId, currentUser)
                 }
                 
                 loadPosts()
@@ -235,7 +234,7 @@
             if (!confirm('Удалить этот пост?')) return
             
             try {
-                await deletePost(postId, currentUser)
+                await window.supabaseAPI.deletePost(postId, currentUser)
                 loadPosts()
                 updateStats()
             } catch (error) {
@@ -259,7 +258,7 @@
             const commentsList = document.getElementById('commentsList')
             
             try {
-                const comments = await getComments(postId)
+                const comments = await window.supabaseAPI.getComments(postId)
                 
                 commentsList.innerHTML = ''
                 
@@ -299,7 +298,7 @@
             }
             
             try {
-                await addComment(currentPostId, content, currentUser)
+                await window.supabaseAPI.addComment(currentPostId, content, currentUser)
                 commentText.value = ''
                 await loadComments(currentPostId)
                 loadPosts()
