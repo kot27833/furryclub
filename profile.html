@@ -60,7 +60,7 @@
     </div>
 
     <script type="module">
-        import { postsAPI, likesAPI, friendsAPI, authAPI } from './supabase.js'
+        import { getPosts, getPostLikes, getComments, getFriends, getAllUsers, deletePost, hasLiked } from './supabase.js'
 
         let currentUser = null
 
@@ -77,16 +77,16 @@
 
         async function loadProfileData() {
             try {
-                const users = await authAPI.getAllUsers()
+                const users = await getAllUsers()
                 const user = users.find(u => u.username === currentUser)
-                const posts = await postsAPI.getPosts()
+                const posts = await getPosts()
                 const userPosts = posts.filter(p => p.author === currentUser)
-                const friends = await friendsAPI.getFriends(currentUser)
+                const friends = await getFriends(currentUser)
                 
                 // Считаем общее количество лайков пользователя
                 let totalLikes = 0
                 for (const post of userPosts) {
-                    const likes = await likesAPI.getPostLikes(post.id)
+                    const likes = await getPostLikes(post.id)
                     totalLikes += likes.length
                 }
                 
@@ -122,7 +122,7 @@
             container.innerHTML = '<div class="loading">Загрузка постов...</div>'
             
             try {
-                const posts = await postsAPI.getPosts()
+                const posts = await getPosts()
                 const userPosts = posts.filter(p => p.author === currentUser)
                     .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
                 
@@ -134,8 +134,8 @@
                 }
                 
                 for (const post of userPosts) {
-                    const likes = await likesAPI.getPostLikes(post.id)
-                    const comments = await commentsAPI.getComments(post.id)
+                    const likes = await getPostLikes(post.id)
+                    const comments = await getComments(post.id)
                     
                     const postElement = document.createElement('div')
                     postElement.className = 'post'
@@ -149,7 +149,7 @@
                             <span>❤️ ${likes.length}</span>
                             <span>💬 ${comments.length}</span>
                         </div>
-                        <button onclick="deletePost(${post.id})" class="btn btn-small btn-danger">🗑️ Удалить</button>
+                        <button onclick="deleteMyPost(${post.id})" class="btn btn-small btn-danger">🗑️ Удалить</button>
                     `
                     container.appendChild(postElement)
                 }
@@ -164,13 +164,13 @@
             container.innerHTML = '<div class="loading">Загрузка лайков...</div>'
             
             try {
-                const posts = await postsAPI.getPosts()
+                const posts = await getPosts()
                 const likedPosts = []
                 
                 // Проверяем каждый пост на наличие лайка от текущего пользователя
                 for (const post of posts) {
-                    const hasLiked = await likesAPI.hasLiked(post.id, currentUser)
-                    if (hasLiked) {
+                    const hasLikedPost = await hasLiked(post.id, currentUser)
+                    if (hasLikedPost) {
                         likedPosts.push(post)
                     }
                 }
@@ -186,8 +186,8 @@
                 }
                 
                 for (const post of likedPosts) {
-                    const likes = await likesAPI.getPostLikes(post.id)
-                    const comments = await commentsAPI.getComments(post.id)
+                    const likes = await getPostLikes(post.id)
+                    const comments = await getComments(post.id)
                     
                     const postElement = document.createElement('div')
                     postElement.className = 'post'
@@ -214,11 +214,11 @@
             alert('🖼️ Функция смены аватара будет доступна в следующем обновлении!')
         }
 
-        async function deletePost(postId) {
+        async function deleteMyPost(postId) {
             if (!confirm('Удалить этот пост?')) return
             
             try {
-                await postsAPI.deletePost(postId, currentUser)
+                await deletePost(postId, currentUser)
                 loadMyPosts()
                 loadProfileData() // Обновляем статистику
             } catch (error) {
