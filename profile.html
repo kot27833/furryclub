@@ -46,7 +46,6 @@
         <div class="profile-tabs">
             <button class="tab-btn active" onclick="openTab('my-posts')">📝 Мои посты</button>
             <button class="tab-btn" onclick="openTab('liked-posts')">❤️ Понравилось</button>
-            <button class="tab-btn" onclick="openTab('settings')">⚙️ Настройки</button>
         </div>
 
         <div id="my-posts" class="tab-content active">
@@ -58,226 +57,185 @@
             <h3>Понравившиеся посты</h3>
             <div id="likedPostsContainer"></div>
         </div>
-
-        <div id="settings" class="tab-content">
-            <h3>Настройки профиля</h3>
-            <div class="settings-form">
-                <div class="setting-item">
-                    <label>О себе:</label>
-                    <textarea id="userBio" placeholder="Расскажите о себе..."></textarea>
-                </div>
-                <div class="setting-item">
-                    <label>Город:</label>
-                    <input type="text" id="userCity" placeholder="Ваш город">
-                </div>
-                <div class="setting-item">
-                    <label>Дата рождения:</label>
-                    <input type="date" id="userBirthday">
-                </div>
-                <button onclick="saveProfile()" class="btn">💾 Сохранить изменения</button>
-            </div>
-            
-            <div class="danger-zone">
-                <h4>⚡ Опасная зона</h4>
-                <button onclick="changePassword()" class="btn btn-warning">🔐 Сменить пароль</button>
-                <button onclick="deleteAccount()" class="btn btn-danger">🗑️ Удалить аккаунт</button>
-            </div>
-        </div>
     </div>
 
-    <script>
-        let currentUser = null;
-        let database = { users: [], posts: [], comments: [], friends: [], messages: [] };
+    <script type="module">
+        import { postsAPI, likesAPI, friendsAPI, authAPI } from './supabase.js'
 
-        async function loadDatabase() {
-            const db = localStorage.getItem('social_network_db');
-            database = db ? JSON.parse(db) : { users: [], posts: [], comments: [], friends: [], messages: [] };
-        }
+        let currentUser = null
 
         function checkAuth() {
-            currentUser = localStorage.getItem('currentUser');
+            currentUser = localStorage.getItem('currentUser')
             if (!currentUser) {
-                window.location.href = 'login.html';
-                return;
+                window.location.href = 'login.html'
+                return
             }
-            document.getElementById('userWelcome').textContent = currentUser;
-            document.getElementById('profileUsername').textContent = currentUser;
-            loadProfileData();
+            document.getElementById('userWelcome').textContent = currentUser
+            document.getElementById('profileUsername').textContent = currentUser
+            loadProfileData()
         }
 
-        function loadProfileData() {
-            const user = database.users.find(u => u.username === currentUser);
-            const userPosts = database.posts.filter(p => p.author === currentUser);
-            const userLikes = database.posts.filter(p => p.likes && p.likes.includes(currentUser));
-            const userFriends = database.friends.filter(f => f.user1 === currentUser || f.user2 === currentUser);
-            
-            // Статистика
-            document.getElementById('userPostsCount').textContent = userPosts.length;
-            document.getElementById('userFriendsCount').textContent = userFriends.length;
-            document.getElementById('userLikesCount').textContent = userLikes.length;
-            
-            // Дата регистрации
-            if (user && user.joined) {
-                document.getElementById('joinDate').textContent = new Date(user.joined).toLocaleDateString();
-            }
-            
-            // Загрузка постов
-            loadMyPosts();
-            loadLikedPosts();
-            
-            // Настройки
-            if (user) {
-                document.getElementById('userBio').value = user.bio || '';
-                document.getElementById('userCity').value = user.city || '';
-                document.getElementById('userBirthday').value = user.birthday || '';
+        async function loadProfileData() {
+            try {
+                const users = await authAPI.getAllUsers()
+                const user = users.find(u => u.username === currentUser)
+                const posts = await postsAPI.getPosts()
+                const userPosts = posts.filter(p => p.author === currentUser)
+                const friends = await friendsAPI.getFriends(currentUser)
+                
+                // Считаем общее количество лайков пользователя
+                let totalLikes = 0
+                for (const post of userPosts) {
+                    const likes = await likesAPI.getPostLikes(post.id)
+                    totalLikes += likes.length
+                }
+                
+                // Статистика
+                document.getElementById('userPostsCount').textContent = userPosts.length
+                document.getElementById('userFriendsCount').textContent = friends.length
+                document.getElementById('userLikesCount').textContent = totalLikes
+                
+                // Дата регистрации
+                if (user && user.created_at) {
+                    document.getElementById('joinDate').textContent = new Date(user.created_at).toLocaleDateString()
+                }
+                
+                // Загрузка постов
+                loadMyPosts()
+                loadLikedPosts()
+                
+            } catch (error) {
+                console.error('Ошибка загрузки профиля:', error)
             }
         }
 
         function openTab(tabName) {
-            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
-            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'))
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'))
             
-            document.getElementById(tabName).classList.add('active');
-            event.target.classList.add('active');
+            document.getElementById(tabName).classList.add('active')
+            event.target.classList.add('active')
         }
 
-        function loadMyPosts() {
-            const container = document.getElementById('myPostsContainer');
-            const userPosts = database.posts.filter(p => p.author === currentUser)
-                .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        async function loadMyPosts() {
+            const container = document.getElementById('myPostsContainer')
+            container.innerHTML = '<div class="loading">Загрузка постов...</div>'
             
-            container.innerHTML = '';
-            
-            if (userPosts.length === 0) {
-                container.innerHTML = '<div class="no-posts">📝 У вас пока нет постов</div>';
-                return;
+            try {
+                const posts = await postsAPI.getPosts()
+                const userPosts = posts.filter(p => p.author === currentUser)
+                    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+                
+                container.innerHTML = ''
+                
+                if (userPosts.length === 0) {
+                    container.innerHTML = '<div class="no-posts">📝 У вас пока нет постов</div>'
+                    return
+                }
+                
+                for (const post of userPosts) {
+                    const likes = await likesAPI.getPostLikes(post.id)
+                    const comments = await commentsAPI.getComments(post.id)
+                    
+                    const postElement = document.createElement('div')
+                    postElement.className = 'post'
+                    postElement.innerHTML = `
+                        <div class="post-header">
+                            <strong>${post.author}</strong>
+                            <span>${new Date(post.created_at).toLocaleString()}</span>
+                        </div>
+                        <div class="post-content">${post.content}</div>
+                        <div class="post-stats">
+                            <span>❤️ ${likes.length}</span>
+                            <span>💬 ${comments.length}</span>
+                        </div>
+                        <button onclick="deletePost(${post.id})" class="btn btn-small btn-danger">🗑️ Удалить</button>
+                    `
+                    container.appendChild(postElement)
+                }
+            } catch (error) {
+                console.error('Ошибка загрузки постов:', error)
+                container.innerHTML = '<div class="no-posts">❌ Ошибка загрузки постов</div>'
             }
-            
-            userPosts.forEach(post => {
-                const postElement = document.createElement('div');
-                postElement.className = 'post';
-                postElement.innerHTML = `
-                    <div class="post-header">
-                        <strong>${post.author}</strong>
-                        <span>${new Date(post.timestamp).toLocaleString()}</span>
-                    </div>
-                    <div class="post-content">${post.content}</div>
-                    <div class="post-stats">
-                        <span>❤️ ${post.likes ? post.likes.length : 0}</span>
-                        <span>💬 ${database.comments.filter(c => c.postId === post.id).length}</span>
-                    </div>
-                    <button onclick="deletePost(${post.id})" class="btn btn-small btn-danger">🗑️ Удалить</button>
-                `;
-                container.appendChild(postElement);
-            });
         }
 
-        function loadLikedPosts() {
-            const container = document.getElementById('likedPostsContainer');
-            const likedPosts = database.posts.filter(p => p.likes && p.likes.includes(currentUser))
-                .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        async function loadLikedPosts() {
+            const container = document.getElementById('likedPostsContainer')
+            container.innerHTML = '<div class="loading">Загрузка лайков...</div>'
             
-            container.innerHTML = '';
-            
-            if (likedPosts.length === 0) {
-                container.innerHTML = '<div class="no-posts">❤️ Вы еще не лайкали посты</div>';
-                return;
+            try {
+                const posts = await postsAPI.getPosts()
+                const likedPosts = []
+                
+                // Проверяем каждый пост на наличие лайка от текущего пользователя
+                for (const post of posts) {
+                    const hasLiked = await likesAPI.hasLiked(post.id, currentUser)
+                    if (hasLiked) {
+                        likedPosts.push(post)
+                    }
+                }
+                
+                // Сортируем по дате
+                likedPosts.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+                
+                container.innerHTML = ''
+                
+                if (likedPosts.length === 0) {
+                    container.innerHTML = '<div class="no-posts">❤️ Вы еще не лайкали посты</div>'
+                    return
+                }
+                
+                for (const post of likedPosts) {
+                    const likes = await likesAPI.getPostLikes(post.id)
+                    const comments = await commentsAPI.getComments(post.id)
+                    
+                    const postElement = document.createElement('div')
+                    postElement.className = 'post'
+                    postElement.innerHTML = `
+                        <div class="post-header">
+                            <strong>${post.author}</strong>
+                            <span>${new Date(post.created_at).toLocaleString()}</span>
+                        </div>
+                        <div class="post-content">${post.content}</div>
+                        <div class="post-stats">
+                            <span>❤️ ${likes.length}</span>
+                            <span>💬 ${comments.length}</span>
+                        </div>
+                    `
+                    container.appendChild(postElement)
+                }
+            } catch (error) {
+                console.error('Ошибка загрузки лайков:', error)
+                container.innerHTML = '<div class="no-posts">❌ Ошибка загрузки лайков</div>'
             }
-            
-            likedPosts.forEach(post => {
-                const postElement = document.createElement('div');
-                postElement.className = 'post';
-                postElement.innerHTML = `
-                    <div class="post-header">
-                        <strong>${post.author}</strong>
-                        <span>${new Date(post.timestamp).toLocaleString()}</span>
-                    </div>
-                    <div class="post-content">${post.content}</div>
-                    <div class="post-stats">
-                        <span>❤️ ${post.likes ? post.likes.length : 0}</span>
-                        <span>💬 ${database.comments.filter(c => c.postId === post.id).length}</span>
-                    </div>
-                `;
-                container.appendChild(postElement);
-            });
-        }
-
-        function saveProfile() {
-            const userIndex = database.users.findIndex(u => u.username === currentUser);
-            if (userIndex === -1) return;
-            
-            database.users[userIndex] = {
-                ...database.users[userIndex],
-                bio: document.getElementById('userBio').value,
-                city: document.getElementById('userCity').value,
-                birthday: document.getElementById('userBirthday').value
-            };
-            
-            localStorage.setItem('social_network_db', JSON.stringify(database));
-            alert('✅ Настройки сохранены!');
         }
 
         function changeAvatar() {
-            alert('🖼️ Функция смены аватара будет доступна в следующем обновлении!');
+            alert('🖼️ Функция смены аватара будет доступна в следующем обновлении!')
         }
 
-        function changePassword() {
-            const newPassword = prompt('Введите новый пароль:');
-            if (newPassword && newPassword.length >= 4) {
-                const userIndex = database.users.findIndex(u => u.username === currentUser);
-                if (userIndex !== -1) {
-                    database.users[userIndex].password = newPassword;
-                    localStorage.setItem('social_network_db', JSON.stringify(database));
-                    alert('✅ Пароль изменен!');
-                }
-            } else {
-                alert('Пароль должен быть至少 4 символа!');
-            }
-        }
-
-        function deleteAccount() {
-            if (confirm('❌ ВНИМАНИЕ! Это удалит ваш аккаунт и все ваши посты. Продолжить?')) {
-                // Удаляем пользователя
-                database.users = database.users.filter(u => u.username !== currentUser);
-                // Удаляем посты пользователя
-                database.posts = database.posts.filter(p => p.author !== currentUser);
-                // Удаляем комментарии пользователя
-                database.comments = database.comments.filter(c => c.author !== currentUser);
-                // Удаляем из друзей
-                database.friends = database.friends.filter(f => f.user1 !== currentUser && f.user2 !== currentUser);
-                // Убираем лайки пользователя
-                database.posts.forEach(post => {
-                    if (post.likes) {
-                        post.likes = post.likes.filter(like => like !== currentUser);
-                    }
-                });
-                
-                localStorage.setItem('social_network_db', JSON.stringify(database));
-                alert('👋 Аккаунт удален!');
-                logout();
-            }
-        }
-
-        function deletePost(postId) {
-            if (confirm('Удалить этот пост?')) {
-                database.posts = database.posts.filter(p => p.id !== postId);
-                database.comments = database.comments.filter(c => c.postId !== postId);
-                localStorage.setItem('social_network_db', JSON.stringify(database));
-                loadMyPosts();
+        async function deletePost(postId) {
+            if (!confirm('Удалить этот пост?')) return
+            
+            try {
+                await postsAPI.deletePost(postId, currentUser)
+                loadMyPosts()
+                loadProfileData() // Обновляем статистику
+            } catch (error) {
+                alert('❌ Ошибка удаления: ' + error.message)
             }
         }
 
         function logout() {
-            localStorage.removeItem('currentUser');
-            window.location.href = 'login.html';
+            localStorage.removeItem('currentUser')
+            window.location.href = 'login.html'
         }
 
         async function init() {
-            await loadDatabase();
-            checkAuth();
+            checkAuth()
         }
 
-        init();
+        init()
     </script>
 </body>
 </html>
