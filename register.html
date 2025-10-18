@@ -34,7 +34,7 @@
     </div>
 
     <script type="module">
-        import { authAPI } from './supabase.js'
+        import { registerUser } from './supabase.js'
 
         document.getElementById('registerForm').addEventListener('submit', async function(e) {
             e.preventDefault()
@@ -59,7 +59,7 @@
             }
             
             try {
-                await authAPI.signUp(username, password)
+                await registerUser(username, password)
                 alert('🎉 Регистрация успешна! Теперь вы можете войти в аккаунт.')
                 window.location.href = 'login.html'
             } catch (error) {
