@@ -1,222 +1,266 @@
 // supabase.js
-import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm'
+const SUPABASE_URL = 'https://qjoxvktgslspdsvfbdpr.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFqb3h2a3Rnc2xzcGRzdmZiZHByIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA2OTUxNTcsImV4cCI6MjA3NjI3MTE1N30.HFc4FrKk47laka4k_8pQfSSCKgA6JISB_fDWlQLpZHw';
 
-const supabaseUrl = 'https://qjoxvktgslspdsvfbdpr.supabase.co'
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFqb3h2a3Rnc2xzcGRzdmZiZHByIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA2OTUxNTcsImV4cCI6MjA3NjI3MTE1N30.HFc4FrKk47laka4k_8pQfSSCKgA6JISB_fDWlQLpZHw'
-
-const supabase = createClient(supabaseUrl, supabaseAnonKey)
-
-// Делаем функции глобальными
+// Глобальные функции для работы с Supabase
 window.supabaseAPI = {
-  // Проверка подключения
-  async checkConnection() {
-    try {
-      const { data, error } = await supabase.from('users').select('*').limit(1)
-      if (error) {
-        console.error('Ошибка подключения к базе:', error)
-        return false
-      }
-      console.log('✅ Подключение к базе успешно')
-      return true
-    } catch (error) {
-      console.error('❌ Критическая ошибка подключения:', error)
-      return false
+    // Регистрация
+    async registerUser(username, password) {
+        try {
+            const response = await fetch(SUPABASE_URL + '/rest/v1/users', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'apikey': SUPABASE_ANON_KEY,
+                    'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+                    'Prefer': 'return=representation'
+                },
+                body: JSON.stringify({
+                    username: username,
+                    password: password
+                })
+            });
+            
+            if (!response.ok) {
+                const error = await response.json();
+                if (error.code === '23505') {
+                    throw new Error('Этот username уже занят');
+                }
+                throw new Error('Ошибка регистрации');
+            }
+            
+            const data = await response.json();
+            return data[0];
+        } catch (error) {
+            throw error;
+        }
+    },
+
+    // Вход
+    async loginUser(username, password) {
+        try {
+            const response = await fetch(SUPABASE_URL + `/rest/v1/users?username=eq.${username}&password=eq.${password}&select=*`, {
+                method: 'GET',
+                headers: {
+                    'apikey': SUPABASE_ANON_KEY,
+                    'Authorization': 'Bearer ' + SUPABASE_ANON_KEY
+                }
+            });
+            
+            if (!response.ok) throw new Error('Ошибка входа');
+            
+            const data = await response.json();
+            if (data.length === 0) throw new Error('Неверный username или пароль');
+            
+            return data[0];
+        } catch (error) {
+            throw error;
+        }
+    },
+
+    // Создать пост
+    async createPost(content, author) {
+        const response = await fetch(SUPABASE_URL + '/rest/v1/posts', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'apikey': SUPABASE_ANON_KEY,
+                'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+                'Prefer': 'return=representation'
+            },
+            body: JSON.stringify({
+                content: content,
+                author: author,
+                likes_count: 0
+            })
+        });
+        
+        const data = await response.json();
+        return data[0];
+    },
+
+    // Получить посты
+    async getPosts() {
+        const response = await fetch(SUPABASE_URL + '/rest/v1/posts?select=*&order=created_at.desc', {
+            headers: {
+                'apikey': SUPABASE_ANON_KEY,
+                'Authorization': 'Bearer ' + SUPABASE_ANON_KEY
+            }
+        });
+        
+        const data = await response.json();
+        return data || [];
+    },
+
+    // Лайкнуть пост
+    async likePost(postId, username) {
+        await fetch(SUPABASE_URL + '/rest/v1/likes', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'apikey': SUPABASE_ANON_KEY,
+                'Authorization': 'Bearer ' + SUPABASE_ANON_KEY
+            },
+            body: JSON.stringify({
+                post_id: postId,
+                username: username
+            })
+        });
+        
+        const likes = await this.getPostLikes(postId);
+        await this.updateLikesCount(postId, likes.length);
+    },
+
+    // Убрать лайк
+    async unlikePost(postId, username) {
+        await fetch(SUPABASE_URL + `/rest/v1/likes?post_id=eq.${postId}&username=eq.${username}`, {
+            method: 'DELETE',
+            headers: {
+                'apikey': SUPABASE_ANON_KEY,
+                'Authorization': 'Bearer ' + SUPABASE_ANON_KEY
+            }
+        });
+        
+        const likes = await this.getPostLikes(postId);
+        await this.updateLikesCount(postId, likes.length);
+    },
+
+    // Получить лайки
+    async getPostLikes(postId) {
+        const response = await fetch(SUPABASE_URL + `/rest/v1/likes?post_id=eq.${postId}&select=username`, {
+            headers: {
+                'apikey': SUPABASE_ANON_KEY,
+                'Authorization': 'Bearer ' + SUPABASE_ANON_KEY
+            }
+        });
+        
+        const data = await response.json();
+        return data || [];
+    },
+
+    // Проверить лайк
+    async hasLiked(postId, username) {
+        const response = await fetch(SUPABASE_URL + `/rest/v1/likes?post_id=eq.${postId}&username=eq.${username}`, {
+            headers: {
+                'apikey': SUPABASE_ANON_KEY,
+                'Authorization': 'Bearer ' + SUPABASE_ANON_KEY
+            }
+        });
+        
+        const data = await response.json();
+        return data.length > 0;
+    },
+
+    // Обновить счетчик лайков
+    async updateLikesCount(postId, likesCount) {
+        await fetch(SUPABASE_URL + `/rest/v1/posts?id=eq.${postId}`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'apikey': SUPABASE_ANON_KEY,
+                'Authorization': 'Bearer ' + SUPABASE_ANON_KEY
+            },
+            body: JSON.stringify({
+                likes_count: likesCount
+            })
+        });
+    },
+
+    // Добавить комментарий
+    async addComment(postId, content, author) {
+        const response = await fetch(SUPABASE_URL + '/rest/v1/comments', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'apikey': SUPABASE_ANON_KEY,
+                'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+                'Prefer': 'return=representation'
+            },
+            body: JSON.stringify({
+                post_id: postId,
+                content: content,
+                author: author
+            })
+        });
+        
+        const data = await response.json();
+        return data[0];
+    },
+
+    // Получить комментарии
+    async getComments(postId) {
+        const response = await fetch(SUPABASE_URL + `/rest/v1/comments?post_id=eq.${postId}&select=*&order=created_at.asc`, {
+            headers: {
+                'apikey': SUPABASE_ANON_KEY,
+                'Authorization': 'Bearer ' + SUPABASE_ANON_KEY
+            }
+        });
+        
+        const data = await response.json();
+        return data || [];
+    },
+
+    // Добавить друга
+    async addFriend(user1, user2) {
+        await fetch(SUPABASE_URL + '/rest/v1/friends', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'apikey': SUPABASE_ANON_KEY,
+                'Authorization': 'Bearer ' + SUPABASE_ANON_KEY
+            },
+            body: JSON.stringify({
+                user1: user1,
+                user2: user2
+            })
+        });
+    },
+
+    // Получить друзей
+    async getFriends(username) {
+        const response = await fetch(SUPABASE_URL + `/rest/v1/friends?or=(user1.eq.${username},user2.eq.${username})`, {
+            headers: {
+                'apikey': SUPABASE_ANON_KEY,
+                'Authorization': 'Bearer ' + SUPABASE_ANON_KEY
+            }
+        });
+        
+        const data = await response.json();
+        return data || [];
+    },
+
+    // Удалить друга
+    async removeFriend(user1, user2) {
+        await fetch(SUPABASE_URL + `/rest/v1/friends?or=(and(user1.eq.${user1},user2.eq.${user2}),and(user1.eq.${user2},user2.eq.${user1}))`, {
+            method: 'DELETE',
+            headers: {
+                'apikey': SUPABASE_ANON_KEY,
+                'Authorization': 'Bearer ' + SUPABASE_ANON_KEY
+            }
+        });
+    },
+
+    // Получить всех пользователей
+    async getAllUsers() {
+        const response = await fetch(SUPABASE_URL + '/rest/v1/users?select=username,created_at&order=created_at.desc', {
+            headers: {
+                'apikey': SUPABASE_ANON_KEY,
+                'Authorization': 'Bearer ' + SUPABASE_ANON_KEY
+            }
+        });
+        
+        const data = await response.json();
+        return data || [];
+    },
+
+    // Удалить пост
+    async deletePost(postId, author) {
+        await fetch(SUPABASE_URL + `/rest/v1/posts?id=eq.${postId}&author=eq.${author}`, {
+            method: 'DELETE',
+            headers: {
+                'apikey': SUPABASE_ANON_KEY,
+                'Authorization': 'Bearer ' + SUPABASE_ANON_KEY
+            }
+        });
     }
-  },
-
-  // Регистрация пользователя
-  async registerUser(username, password) {
-    try {
-      const { data, error } = await supabase
-        .from('users')
-        .insert([{ username, password }])
-        .select()
-      
-      if (error) {
-        if (error.code === '23505') throw new Error('Этот username уже занят')
-        throw new Error('Ошибка базы данных: ' + error.message)
-      }
-      
-      return data[0]
-    } catch (error) {
-      throw error
-    }
-  },
-
-  // Вход пользователя
-  async loginUser(username, password) {
-    try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('username', username)
-        .eq('password', password)
-        .single()
-      
-      if (error) {
-        if (error.code === 'PGRST116') throw new Error('Неверный username или пароль')
-        throw new Error('Ошибка базы данных: ' + error.message)
-      }
-      
-      return data
-    } catch (error) {
-      throw error
-    }
-  },
-
-  // Создать пост
-  async createPost(content, author) {
-    const { data, error } = await supabase
-      .from('posts')
-      .insert([{ content, author, likes_count: 0 }])
-      .select()
-    
-    if (error) throw error
-    return data[0]
-  },
-
-  // Получить все посты
-  async getPosts() {
-    const { data, error } = await supabase
-      .from('posts')
-      .select('*')
-      .order('created_at', { ascending: false })
-    
-    if (error) throw error
-    return data || []
-  },
-
-  // Лайкнуть пост
-  async likePost(postId, username) {
-    const { error } = await supabase
-      .from('likes')
-      .insert([{ post_id: postId, username }])
-    
-    if (error) throw error
-    
-    const likes = await this.getPostLikes(postId)
-    await this.updateLikesCount(postId, likes.length)
-  },
-
-  // Убрать лайк
-  async unlikePost(postId, username) {
-    const { error } = await supabase
-      .from('likes')
-      .delete()
-      .eq('post_id', postId)
-      .eq('username', username)
-    
-    if (error) throw error
-    
-    const likes = await this.getPostLikes(postId)
-    await this.updateLikesCount(postId, likes.length)
-  },
-
-  // Получить лайки поста
-  async getPostLikes(postId) {
-    const { data, error } = await supabase
-      .from('likes')
-      .select('username')
-      .eq('post_id', postId)
-    
-    if (error) throw error
-    return data || []
-  },
-
-  // Проверить лайк
-  async hasLiked(postId, username) {
-    const { data, error } = await supabase
-      .from('likes')
-      .select('id')
-      .eq('post_id', postId)
-      .eq('username', username)
-    
-    if (error) throw error
-    return data.length > 0
-  },
-
-  // Обновить счетчик лайков
-  async updateLikesCount(postId, likesCount) {
-    const { error } = await supabase
-      .from('posts')
-      .update({ likes_count: likesCount })
-      .eq('id', postId)
-    
-    if (error) throw error
-  },
-
-  // Добавить комментарий
-  async addComment(postId, content, author) {
-    const { data, error } = await supabase
-      .from('comments')
-      .insert([{ post_id: postId, content, author }])
-      .select()
-    
-    if (error) throw error
-    return data[0]
-  },
-
-  // Получить комментарии
-  async getComments(postId) {
-    const { data, error } = await supabase
-      .from('comments')
-      .select('*')
-      .eq('post_id', postId)
-      .order('created_at', { ascending: true })
-    
-    if (error) throw error
-    return data || []
-  },
-
-  // Добавить друга
-  async addFriend(user1, user2) {
-    const { error } = await supabase
-      .from('friends')
-      .insert([{ user1, user2 }])
-    
-    if (error) throw error
-  },
-
-  // Получить друзей
-  async getFriends(username) {
-    const { data, error } = await supabase
-      .from('friends')
-      .select('*')
-      .or(`user1.eq.${username},user2.eq.${username}`)
-    
-    if (error) throw error
-    return data || []
-  },
-
-  // Удалить друга
-  async removeFriend(user1, user2) {
-    const { error } = await supabase
-      .from('friends')
-      .delete()
-      .or(`and(user1.eq.${user1},user2.eq.${user2}),and(user1.eq.${user2},user2.eq.${user1})`)
-    
-    if (error) throw error
-  },
-
-  // Получить всех пользователей
-  async getAllUsers() {
-    const { data, error } = await supabase
-      .from('users')
-      .select('username, created_at')
-      .order('created_at', { ascending: false })
-    
-    if (error) throw error
-    return data || []
-  },
-
-  // Удалить пост
-  async deletePost(postId, author) {
-    const { error } = await supabase
-      .from('posts')
-      .delete()
-      .eq('id', postId)
-      .eq('author', author)
-    
-    if (error) throw error
-  }
-}
+};
