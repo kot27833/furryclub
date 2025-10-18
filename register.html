@@ -1,42 +1,113 @@
-<!-- В register.html заменить только script тег -->
-<script src="./supabase.js"></script>
-<script>
-    document.getElementById('registerForm').addEventListener('submit', async function(e) {
-        e.preventDefault()
-        
-        const username = document.getElementById('username').value.trim()
-        const password = document.getElementById('password').value
-        const confirmPassword = document.getElementById('confirmPassword').value
-        
-        if (username.length < 3) {
-            alert('❌ Username должен быть至少 3 символа!')
-            return
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Регистрация - MySocialNet</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="auth-container">
+        <div class="auth-header">
+            <h1>🐬 MySocialNet</h1>
+            <p>Создайте свой аккаунт всего за минуту!</p>
+        </div>
+
+        <div class="auth-form">
+            <h2>🎉 Регистрация</h2>
+            
+            <div style="background: #e8f5e8; padding: 10px; border-radius: 8px; margin-bottom: 15px; font-size: 14px;">
+                <strong>Тестовые аккаунты:</strong><br>
+                test / test<br>
+                alex / 123<br>
+                maria / 123
+            </div>
+            
+            <form id="registerForm">
+                <input type="text" id="username" placeholder="👤 Придумайте username" required>
+                <input type="password" id="password" placeholder="🔒 Придумайте пароль" required>
+                <input type="password" id="confirmPassword" placeholder="🔒 Повторите пароль" required>
+                <button type="submit" class="btn btn-large">🚀 Создать аккаунт</button>
+            </form>
+
+            <div class="password-requirements">
+                <h4>Требования:</h4>
+                <div class="requirement">✅ Username уникальный</div>
+                <div class="requirement">✅ Пароль любой длины</div>
+                <div class="requirement">✅ Данные сохраняются для всех</div>
+            </div>
+
+            <div class="auth-links">
+                <a href="login.html">🔐 Уже есть аккаунт? Войти</a>
+            </div>
+        </div>
+    </div>
+
+    <script src="supabase.js"></script>
+    <script>
+        document.getElementById('registerForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+            
+            if (username.length < 3) {
+                alert('❌ Username должен быть至少 3 символа!');
+                return;
+            }
+            
+            if (password.length < 1) {
+                alert('❌ Введите пароль!');
+                return;
+            }
+            
+            if (password !== confirmPassword) {
+                alert('❌ Пароли не совпадают!');
+                return;
+            }
+            
+            const button = e.target.querySelector('button');
+            const originalText = button.textContent;
+            button.textContent = '⏳ Регистрация...';
+            button.disabled = true;
+            
+            try {
+                console.log('Попытка регистрации:', username);
+                await window.supabaseAPI.registerUser(username, password);
+                
+                alert('🎉 Регистрация успешна! Теперь вы можете войти в аккаунт.');
+                window.location.href = 'login.html';
+                
+            } catch (error) {
+                console.error('Ошибка регистрации:', error);
+                alert('❌ ' + error.message);
+            } finally {
+                button.textContent = originalText;
+                button.disabled = false;
+            }
+        });
+
+        // Если пользователь уже авторизован - перенаправляем
+        if (localStorage.getItem('currentUser')) {
+            window.location.href = 'index.html';
         }
-        
-        if (password.length < 1) {
-            alert('❌ Введите пароль!')
-            return
+    </script>
+
+    <style>
+        .password-requirements {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+            text-align: left;
         }
-        
-        if (password !== confirmPassword) {
-            alert('❌ Пароли не совпадают!')
-            return
+        .password-requirements h4 {
+            margin-top: 0;
+            color: #764ba2;
         }
-        
-        const button = e.target.querySelector('button')
-        const originalText = button.textContent
-        button.textContent = '⏳ Регистрация...'
-        button.disabled = true
-        
-        try {
-            await window.supabaseAPI.registerUser(username, password)
-            alert('🎉 Регистрация успешна! Теперь вы можете войти в аккаунт.')
-            window.location.href = 'login.html'
-        } catch (error) {
-            alert('❌ ' + error.message)
-        } finally {
-            button.textContent = originalText
-            button.disabled = false
+        .requirement {
+            margin: 5px 0;
+            font-size: 14px;
         }
-    })
-</script>
+    </style>
+</body>
+</html>
