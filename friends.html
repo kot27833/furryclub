@@ -41,9 +41,8 @@
         </div>
     </div>
 
-    <script type="module">
-        import { getFriends, addFriend, removeFriend, getAllUsers } from './supabase.js'
-
+    <script src="./supabase.js"></script>
+    <script>
         let currentUser = null
 
         function checkAuth() {
@@ -77,7 +76,7 @@
             container.innerHTML = '<div class="loading">Загрузка друзей...</div>'
             
             try {
-                const userFriends = await getFriends(currentUser)
+                const userFriends = await window.supabaseAPI.getFriends(currentUser)
                 
                 container.innerHTML = ''
                 
@@ -116,12 +115,12 @@
             container.innerHTML = '<div class="loading">Поиск пользователей...</div>'
             
             try {
-                const currentFriends = await getFriends(currentUser)
+                const currentFriends = await window.supabaseAPI.getFriends(currentUser)
                 const friendUsernames = currentFriends.map(f => 
                     f.user1 === currentUser ? f.user2 : f.user1
                 )
                 
-                const users = await getAllUsers()
+                const users = await window.supabaseAPI.getAllUsers()
                 
                 const availableUsers = users.filter(u => 
                     u.username !== currentUser && !friendUsernames.includes(u.username)
@@ -169,7 +168,7 @@
 
         async function addFriend(friendUsername) {
             try {
-                const existingFriends = await getFriends(currentUser)
+                const existingFriends = await window.supabaseAPI.getFriends(currentUser)
                 const existingFriendship = existingFriends.find(f => 
                     (f.user1 === currentUser && f.user2 === friendUsername) ||
                     (f.user1 === friendUsername && f.user2 === currentUser)
@@ -180,7 +179,7 @@
                     return
                 }
                 
-                await addFriend(currentUser, friendUsername)
+                await window.supabaseAPI.addFriend(currentUser, friendUsername)
                 
                 alert(`✅ Теперь вы друзья с ${friendUsername}!`)
                 loadFindFriends()
@@ -194,7 +193,7 @@
             if (!confirm(`Удалить ${friendUsername} из друзей?`)) return
             
             try {
-                await removeFriend(currentUser, friendUsername)
+                await window.supabaseAPI.removeFriend(currentUser, friendUsername)
                 alert(`👋 ${friendUsername} удален из друзей`)
                 loadAllFriends()
             } catch (error) {
