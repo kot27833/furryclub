@@ -42,7 +42,7 @@
     </div>
 
     <script type="module">
-        import { friendsAPI, authAPI } from './supabase.js'
+        import { getFriends, addFriend, removeFriend, getAllUsers } from './supabase.js'
 
         let currentUser = null
         let allUsers = []
@@ -78,7 +78,7 @@
             container.innerHTML = '<div class="loading">Загрузка друзей...</div>'
             
             try {
-                const userFriends = await friendsAPI.getFriends(currentUser)
+                const userFriends = await getFriends(currentUser)
                 
                 container.innerHTML = ''
                 
@@ -118,13 +118,13 @@
             
             try {
                 // Получаем текущих друзей
-                const currentFriends = await friendsAPI.getFriends(currentUser)
+                const currentFriends = await getFriends(currentUser)
                 const friendUsernames = currentFriends.map(f => 
                     f.user1 === currentUser ? f.user2 : f.user1
                 )
                 
                 // Получаем всех пользователей
-                const users = await authAPI.getAllUsers()
+                const users = await getAllUsers()
                 allUsers = users
                 
                 // Фильтруем - убираем себя и текущих друзей
@@ -175,7 +175,7 @@
         async function addFriend(friendUsername) {
             try {
                 // Проверяем, нет ли уже такой дружбы
-                const existingFriends = await friendsAPI.getFriends(currentUser)
+                const existingFriends = await getFriends(currentUser)
                 const existingFriendship = existingFriends.find(f => 
                     (f.user1 === currentUser && f.user2 === friendUsername) ||
                     (f.user1 === friendUsername && f.user2 === currentUser)
@@ -187,7 +187,7 @@
                 }
                 
                 // Создаем дружбу
-                await friendsAPI.addFriend(currentUser, friendUsername)
+                await addFriend(currentUser, friendUsername)
                 
                 alert(`✅ Теперь вы друзья с ${friendUsername}!`)
                 loadFindFriends()
@@ -201,7 +201,7 @@
             if (!confirm(`Удалить ${friendUsername} из друзей?`)) return
             
             try {
-                await friendsAPI.removeFriend(currentUser, friendUsername)
+                await removeFriend(currentUser, friendUsername)
                 alert(`👋 ${friendUsername} удален из друзей`)
                 loadAllFriends()
             } catch (error) {
