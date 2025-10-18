@@ -75,7 +75,7 @@
     </div>
 
     <script type="module">
-        import { postsAPI, likesAPI, commentsAPI, authAPI } from './supabase.js'
+        import { createPost, getPosts, likePost, unlikePost, hasLiked, getPostLikes, addComment, getComments, deletePost, getAllUsers } from './supabase.js'
 
         let currentUser = null
         let currentPostId = null
@@ -91,8 +91,8 @@
 
         async function updateStats() {
             try {
-                const posts = await postsAPI.getPosts()
-                const users = await authAPI.getAllUsers()
+                const posts = await getPosts()
+                const users = await getAllUsers()
                 
                 document.getElementById('postsCount').textContent = posts.length
                 document.getElementById('usersCount').textContent = users.length
@@ -108,7 +108,7 @@
             postsContainer.innerHTML = '<div class="loading">Загрузка постов...</div>'
             
             try {
-                let posts = await postsAPI.getPosts()
+                let posts = await getPosts()
                 
                 if (filter === 'popular') {
                     posts = posts.sort((a, b) => b.likes_count - a.likes_count)
@@ -122,9 +122,9 @@
                 postsContainer.innerHTML = ''
                 
                 for (const post of posts) {
-                    const likes = await likesAPI.getPostLikes(post.id)
-                    const hasLiked = await likesAPI.hasLiked(post.id, currentUser)
-                    const postComments = await commentsAPI.getComments(post.id)
+                    const likes = await getPostLikes(post.id)
+                    const hasLikedPost = await hasLiked(post.id, currentUser)
+                    const postComments = await getComments(post.id)
                     const isMyPost = post.author === currentUser
                     
                     const postElement = document.createElement('div')
@@ -146,8 +146,8 @@
                             <span>💬 ${postComments.length}</span>
                         </div>
                         <div class="post-actions">
-                            <button onclick="likePost(${post.id})" class="action-btn ${hasLiked ? 'liked' : ''}">
-                                ${hasLiked ? '❤️' : '🤍'} Лайк
+                            <button onclick="toggleLike(${post.id})" class="action-btn ${hasLikedPost ? 'liked' : ''}">
+                                ${hasLikedPost ? '❤️' : '🤍'} Лайк
                             </button>
                             <button onclick="openComments(${post.id})" class="action-btn">💬 Комментировать</button>
                         </div>
@@ -205,7 +205,7 @@
             }
             
             try {
-                await postsAPI.createPost(content, currentUser)
+                await createPost(content, currentUser)
                 postText.value = ''
                 loadPosts()
                 updateStats()
@@ -215,19 +215,15 @@
             }
         }
 
-        async function likePost(postId) {
+        async function toggleLike(postId) {
             try {
-                const hasLiked = await likesAPI.hasLiked(postId, currentUser)
+                const hasLikedPost = await hasLiked(postId, currentUser)
                 
-                if (hasLiked) {
-                    await likesAPI.unlikePost(postId, currentUser)
+                if (hasLikedPost) {
+                    await unlikePost(postId, currentUser)
                 } else {
-                    await likesAPI.likePost(postId, currentUser)
+                    await likePost(postId, currentUser)
                 }
-                
-                // Обновляем счетчик лайков
-                const likes = await likesAPI.getPostLikes(postId)
-                await postsAPI.updateLikes(postId, likes.length)
                 
                 loadPosts()
             } catch (error) {
@@ -239,7 +235,7 @@
             if (!confirm('Удалить этот пост?')) return
             
             try {
-                await postsAPI.deletePost(postId, currentUser)
+                await deletePost(postId, currentUser)
                 loadPosts()
                 updateStats()
             } catch (error) {
@@ -263,7 +259,7 @@
             const commentsList = document.getElementById('commentsList')
             
             try {
-                const comments = await commentsAPI.getComments(postId)
+                const comments = await getComments(postId)
                 
                 commentsList.innerHTML = ''
                 
@@ -303,7 +299,7 @@
             }
             
             try {
-                await commentsAPI.addComment(currentPostId, content, currentUser)
+                await addComment(currentPostId, content, currentUser)
                 commentText.value = ''
                 await loadComments(currentPostId)
                 loadPosts() // Обновляем счетчик комментариев
