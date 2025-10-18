@@ -14,16 +14,16 @@
         <div class="auth-form">
             <h2>🔐 Вход в аккаунт</h2>
             <form id="loginForm">
-                <input type="text" id="username" placeholder="👤 Ваш ник" required>
+                <input type="text" id="username" placeholder="👤 Ваш username" required>
                 <input type="password" id="password" placeholder="🔒 Ваш пароль" required>
                 <button type="submit" class="btn btn-large">🚀 Войти</button>
             </form>
 
             <div class="auth-features">
-                <div class="feature">✅ Безопасные аккаунты</div>
-                <div class="feature">💬 Сообщения и чаты</div>
-                <div class="feature">👥 Друзья и сообщества</div>
-                <div class="feature">📱 Удобный интерфейс</div>
+                <div class="feature">✅ Единая база данных</div>
+                <div class="feature">💬 Реальные посты для всех</div>
+                <div class="feature">👥 Настоящие друзья</div>
+                <div class="feature">📱 Supabase powered</div>
             </div>
 
             <div class="auth-links">
@@ -33,57 +33,30 @@
         </div>
     </div>
 
-    <script>
-        function getLocalDB() {
-            const db = localStorage.getItem('social_network_db');
-            return db ? JSON.parse(db) : { users: [], posts: [], comments: [], friends: [], messages: [] };
-        }
-
-        async function syncWithGitHub() {
-            try {
-                const response = await fetch('https://raw.githubusercontent.com/ВАШ_НИК/my-social-network/main/database.json?t=' + Date.now());
-                const githubDB = await response.json();
-                const localDB = getLocalDB();
-                
-                const mergedDB = {
-                    users: [...new Map([...localDB.users, ...githubDB.users].map(user => [user.username, user])).values()],
-                    posts: [...new Map([...localDB.posts, ...githubDB.posts].map(post => [post.id, post])).values()],
-                    comments: [...new Map([...localDB.comments, ...githubDB.comments].map(comment => [comment.id, comment])).values()],
-                    friends: [...new Map([...localDB.friends, ...githubDB.friends].map(friend => [friend.id, friend])).values()],
-                    messages: [...new Map([...localDB.messages, ...githubDB.messages].map(msg => [msg.id, msg])).values()]
-                };
-                
-                localStorage.setItem('social_network_db', JSON.stringify(mergedDB));
-                return mergedDB;
-            } catch (error) {
-                return getLocalDB();
-            }
-        }
-
-        async function checkUser(username, password) {
-            const database = await syncWithGitHub();
-            const user = database.users.find(u => u.username === username && u.password === password);
-            return !!user;
-        }
+    <script type="module">
+        import { authAPI } from './supabase.js'
 
         document.getElementById('loginForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
+            e.preventDefault()
             
-            const username = document.getElementById('username').value;
-            const password = document.getElementById('password').value;
+            const username = document.getElementById('username').value
+            const password = document.getElementById('password').value
             
-            const isValid = await checkUser(username, password);
-            
-            if (isValid) {
-                localStorage.setItem('currentUser', username);
-                window.location.href = 'index.html';
-            } else {
-                alert('❌ Неверный логин или пароль!');
+            try {
+                const user = await authAPI.signIn(username, password)
+                
+                // Сохраняем информацию о пользователе
+                localStorage.setItem('currentUser', user.username)
+                
+                alert('✅ Вход успешен!')
+                window.location.href = 'index.html'
+            } catch (error) {
+                alert('❌ Ошибка входа: ' + error.message)
             }
-        });
+        })
 
         function showForgotPassword() {
-            alert('🔐 Функция восстановления пароля будет доступна в следующем обновлении!');
+            alert('🔐 Функция восстановления пароля будет доступна в следующем обновлении!')
         }
     </script>
 </body>
