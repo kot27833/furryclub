@@ -1,7 +1,7 @@
 // supabase.js
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm'
 
-// ЗАМЕНИТЕ НА ВАШИ РЕАЛЬНЫЕ КЛЮЧИ!
+// ⚠️ ЗАМЕНИТЕ НА ВАШИ РЕАЛЬНЫЕ КЛЮЧИ! ⚠️
 const supabaseUrl = 'https://qjoxvktgslspdsvfbdpr.supabase.co'
 const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFqb3h2a3Rnc2xzcGRzdmZiZHByIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA2OTUxNTcsImV4cCI6MjA3NjI3MTE1N30.HFc4FrKk47laka4k_8pQfSSCKgA6JISB_fDWlQLpZHw'
 
@@ -15,10 +15,10 @@ export async function checkConnection() {
       console.error('Ошибка подключения к базе:', error)
       return false
     }
-    console.log('Подключение к базе успешно')
+    console.log('✅ Подключение к базе успешно')
     return true
   } catch (error) {
-    console.error('Критическая ошибка подключения:', error)
+    console.error('❌ Критическая ошибка подключения:', error)
     return false
   }
 }
@@ -26,34 +26,18 @@ export async function checkConnection() {
 // Регистрация пользователя
 export async function registerUser(username, password) {
   try {
-    console.log('Попытка регистрации:', username)
-    
     const { data, error } = await supabase
       .from('users')
-      .insert([
-        {
-          username: username,
-          password: password
-        }
-      ])
+      .insert([{ username, password }])
       .select()
     
     if (error) {
-      console.error('Ошибка Supabase при регистрации:', error)
-      if (error.code === '23505') {
-        throw new Error('Этот username уже занят')
-      }
+      if (error.code === '23505') throw new Error('Этот username уже занят')
       throw new Error('Ошибка базы данных: ' + error.message)
     }
     
-    if (!data || data.length === 0) {
-      throw new Error('Пользователь не был создан')
-    }
-    
-    console.log('Успешная регистрация:', data[0])
     return data[0]
   } catch (error) {
-    console.error('Общая ошибка регистрации:', error)
     throw error
   }
 }
@@ -61,8 +45,6 @@ export async function registerUser(username, password) {
 // Вход пользователя
 export async function loginUser(username, password) {
   try {
-    console.log('Попытка входа:', username)
-    
     const { data, error } = await supabase
       .from('users')
       .select('*')
@@ -71,271 +53,168 @@ export async function loginUser(username, password) {
       .single()
     
     if (error) {
-      console.error('Ошибка Supabase при входе:', error)
-      if (error.code === 'PGRST116') {
-        throw new Error('Неверный username или пароль')
-      }
+      if (error.code === 'PGRST116') throw new Error('Неверный username или пароль')
       throw new Error('Ошибка базы данных: ' + error.message)
     }
     
-    if (!data) {
-      throw new Error('Неверный username или пароль')
-    }
-    
-    console.log('Успешный вход:', data)
     return data
   } catch (error) {
-    console.error('Общая ошибка входа:', error)
     throw error
   }
 }
 
 // Создать пост
 export async function createPost(content, author) {
-  try {
-    const { data, error } = await supabase
-      .from('posts')
-      .insert([
-        {
-          content: content,
-          author: author,
-          likes_count: 0
-        }
-      ])
-      .select()
-    
-    if (error) throw error
-    return data[0]
-  } catch (error) {
-    console.error('Ошибка создания поста:', error)
-    throw error
-  }
+  const { data, error } = await supabase
+    .from('posts')
+    .insert([{ content, author, likes_count: 0 }])
+    .select()
+  
+  if (error) throw error
+  return data[0]
 }
 
 // Получить все посты
 export async function getPosts() {
-  try {
-    const { data, error } = await supabase
-      .from('posts')
-      .select('*')
-      .order('created_at', { ascending: false })
-    
-    if (error) throw error
-    return data || []
-  } catch (error) {
-    console.error('Ошибка получения постов:', error)
-    return []
-  }
+  const { data, error } = await supabase
+    .from('posts')
+    .select('*')
+    .order('created_at', { ascending: false })
+  
+  if (error) throw error
+  return data || []
 }
 
 // Лайкнуть пост
 export async function likePost(postId, username) {
-  try {
-    const { error } = await supabase
-      .from('likes')
-      .insert([
-        {
-          post_id: postId,
-          username: username
-        }
-      ])
-    
-    if (error) throw error
-    
-    // Обновляем счетчик лайков
-    const likes = await getPostLikes(postId)
-    await updateLikesCount(postId, likes.length)
-  } catch (error) {
-    console.error('Ошибка лайка:', error)
-    throw error
-  }
+  const { error } = await supabase
+    .from('likes')
+    .insert([{ post_id: postId, username }])
+  
+  if (error) throw error
+  
+  const likes = await getPostLikes(postId)
+  await updateLikesCount(postId, likes.length)
 }
 
 // Убрать лайк
 export async function unlikePost(postId, username) {
-  try {
-    const { error } = await supabase
-      .from('likes')
-      .delete()
-      .eq('post_id', postId)
-      .eq('username', username)
-    
-    if (error) throw error
-    
-    // Обновляем счетчик лайков
-    const likes = await getPostLikes(postId)
-    await updateLikesCount(postId, likes.length)
-  } catch (error) {
-    console.error('Ошибка удаления лайка:', error)
-    throw error
-  }
+  const { error } = await supabase
+    .from('likes')
+    .delete()
+    .eq('post_id', postId)
+    .eq('username', username)
+  
+  if (error) throw error
+  
+  const likes = await getPostLikes(postId)
+  await updateLikesCount(postId, likes.length)
 }
 
 // Получить лайки поста
 export async function getPostLikes(postId) {
-  try {
-    const { data, error } = await supabase
-      .from('likes')
-      .select('username')
-      .eq('post_id', postId)
-    
-    if (error) throw error
-    return data || []
-  } catch (error) {
-    console.error('Ошибка получения лайков:', error)
-    return []
-  }
+  const { data, error } = await supabase
+    .from('likes')
+    .select('username')
+    .eq('post_id', postId)
+  
+  if (error) throw error
+  return data || []
 }
 
 // Проверить лайк
 export async function hasLiked(postId, username) {
-  try {
-    const { data, error } = await supabase
-      .from('likes')
-      .select('id')
-      .eq('post_id', postId)
-      .eq('username', username)
-    
-    if (error) throw error
-    return data.length > 0
-  } catch (error) {
-    console.error('Ошибка проверки лайка:', error)
-    return false
-  }
+  const { data, error } = await supabase
+    .from('likes')
+    .select('id')
+    .eq('post_id', postId)
+    .eq('username', username)
+  
+  if (error) throw error
+  return data.length > 0
 }
 
 // Обновить счетчик лайков
 export async function updateLikesCount(postId, likesCount) {
-  try {
-    const { error } = await supabase
-      .from('posts')
-      .update({ likes_count: likesCount })
-      .eq('id', postId)
-    
-    if (error) throw error
-  } catch (error) {
-    console.error('Ошибка обновления счетчика:', error)
-    throw error
-  }
+  const { error } = await supabase
+    .from('posts')
+    .update({ likes_count: likesCount })
+    .eq('id', postId)
+  
+  if (error) throw error
 }
 
 // Добавить комментарий
 export async function addComment(postId, content, author) {
-  try {
-    const { data, error } = await supabase
-      .from('comments')
-      .insert([
-        {
-          post_id: postId,
-          content: content,
-          author: author
-        }
-      ])
-      .select()
-    
-    if (error) throw error
-    return data[0]
-  } catch (error) {
-    console.error('Ошибка добавления комментария:', error)
-    throw error
-  }
+  const { data, error } = await supabase
+    .from('comments')
+    .insert([{ post_id: postId, content, author }])
+    .select()
+  
+  if (error) throw error
+  return data[0]
 }
 
 // Получить комментарии
 export async function getComments(postId) {
-  try {
-    const { data, error } = await supabase
-      .from('comments')
-      .select('*')
-      .eq('post_id', postId)
-      .order('created_at', { ascending: true })
-    
-    if (error) throw error
-    return data || []
-  } catch (error) {
-    console.error('Ошибка получения комментариев:', error)
-    return []
-  }
+  const { data, error } = await supabase
+    .from('comments')
+    .select('*')
+    .eq('post_id', postId)
+    .order('created_at', { ascending: true })
+  
+  if (error) throw error
+  return data || []
 }
 
 // Добавить друга
 export async function addFriend(user1, user2) {
-  try {
-    const { error } = await supabase
-      .from('friends')
-      .insert([
-        {
-          user1: user1,
-          user2: user2
-        }
-      ])
-    
-    if (error) throw error
-  } catch (error) {
-    console.error('Ошибка добавления друга:', error)
-    throw error
-  }
+  const { error } = await supabase
+    .from('friends')
+    .insert([{ user1, user2 }])
+  
+  if (error) throw error
 }
 
 // Получить друзей
 export async function getFriends(username) {
-  try {
-    const { data, error } = await supabase
-      .from('friends')
-      .select('*')
-      .or(`user1.eq.${username},user2.eq.${username}`)
-    
-    if (error) throw error
-    return data || []
-  } catch (error) {
-    console.error('Ошибка получения друзей:', error)
-    return []
-  }
+  const { data, error } = await supabase
+    .from('friends')
+    .select('*')
+    .or(`user1.eq.${username},user2.eq.${username}`)
+  
+  if (error) throw error
+  return data || []
 }
 
 // Удалить друга
 export async function removeFriend(user1, user2) {
-  try {
-    const { error } = await supabase
-      .from('friends')
-      .delete()
-      .or(`and(user1.eq.${user1},user2.eq.${user2}),and(user1.eq.${user2},user2.eq.${user1})`)
-    
-    if (error) throw error
-  } catch (error) {
-    console.error('Ошибка удаления друга:', error)
-    throw error
-  }
+  const { error } = await supabase
+    .from('friends')
+    .delete()
+    .or(`and(user1.eq.${user1},user2.eq.${user2}),and(user1.eq.${user2},user2.eq.${user1})`)
+  
+  if (error) throw error
 }
 
 // Получить всех пользователей
 export async function getAllUsers() {
-  try {
-    const { data, error } = await supabase
-      .from('users')
-      .select('username, created_at')
-      .order('created_at', { ascending: false })
-    
-    if (error) throw error
-    return data || []
-  } catch (error) {
-    console.error('Ошибка получения пользователей:', error)
-    return []
-  }
+  const { data, error } = await supabase
+    .from('users')
+    .select('username, created_at')
+    .order('created_at', { ascending: false })
+  
+  if (error) throw error
+  return data || []
 }
 
 // Удалить пост
 export async function deletePost(postId, author) {
-  try {
-    const { error } = await supabase
-      .from('posts')
-      .delete()
-      .eq('id', postId)
-      .eq('author', author)
-    
-    if (error) throw error
-  } catch (error) {
-    console.error('Ошибка удаления поста:', error)
-    throw error
-  }
+  const { error } = await supabase
+    .from('posts')
+    .delete()
+    .eq('id', postId)
+    .eq('author', author)
+  
+  if (error) throw error
 }
